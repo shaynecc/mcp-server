@@ -430,7 +430,9 @@ def test_virtual_template_without_short_link_detail_reports_uncovered_rows():
         response = call("complete_recipients_upload", {"request": prepared["confirmation"], "columns": ["phone"], "traffic": {
             "sub_account": "g", "signature": "签名", "template_id": "virtual", "content": "演示通知",
         }})
-        assert private(response)["trafficReport"] == {
+        report = private(response)["trafficReport"]
+        assert report.pop("failures")[0]["error"]["code"] == "short_link_mode_unknown"
+        assert report == {
             "totalRows": 1, "checkedRows": 0, "failedRows": 0, "uncheckedRows": 1,
             "missingResourceRows": 0, "missingRowNumbers": [], "reason": "short_link_mode_unavailable",
         }
@@ -438,7 +440,7 @@ def test_virtual_template_without_short_link_detail_reports_uncovered_rows():
 
 
 @pytest.mark.parametrize("code", ["1001", "1999", "SY:0500"])
-def test_sms_rejection_and_uncertain_outcomes_match_across_both_send_forms(code):
+def test_backend_errors_are_not_classified_across_both_send_forms(code):
     def respond(action, _params):
         assert action == "SendSmsForAgent"
         return httpx.Response(200, json={"ResponseMetadata": {"Error": {"Code": code}}})
@@ -451,5 +453,8 @@ def test_sms_rejection_and_uncertain_outcomes_match_across_both_send_forms(code)
         }})
         for result in (direct, trial):
             assert result["structuredContent"]["error"]["code"] == code
-            assert result["structuredContent"]["error"]["outcome_unknown"] is (code != "1001")
+            assert "outcome_unknown" not in result["structuredContent"]["error"]
+            assert result["structuredContent"]["error"]["backend_response"] == {
+                "ResponseMetadata": {"Error": {"Code": code}},
+            }
         assert [action for action, _ in calls] == ["SendSmsForAgent", "SendSmsForAgent"]

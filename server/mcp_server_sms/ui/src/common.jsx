@@ -71,7 +71,10 @@ export function useOperation() {
 export function Feedback({ operation }) {
   if (!operation.error) return null;
   return <Alert className="sms-feedback" type={operation.uncertain ? 'warning' : 'error'}
-    content={<>{operation.error.message}{operation.error.code && <div>错误码：{operation.error.code}</div>}{operation.error.requestId && <div>排障编号：{operation.error.requestId}</div>}</>} />;
+    content={<><div style={{ whiteSpace: 'pre-wrap' }}>{operation.error.message}</div>
+      {operation.error.code != null && <div>错误码：{operation.error.code}</div>}
+      {operation.error.httpStatus != null && <div>HTTP 状态：{operation.error.httpStatus}</div>}
+      {operation.error.requestId && <div>排障编号：{operation.error.requestId}</div>}</>} />;
 }
 
 export function Summary({ items }) {

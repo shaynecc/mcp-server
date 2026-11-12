@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const failureSchema = z.object({
   success: z.literal(false),
-  error: z.object({ code: z.string(), message: z.string(), outcome_unknown: z.boolean() }).passthrough(),
+  error: z.object({ code: z.union([z.string(), z.number()]).nullish(), message: z.string().nullish() }).passthrough(),
 }).passthrough();
 
 // 仅校验表单实际消费的字段，未知业务字段和原始值保留在原响应中。

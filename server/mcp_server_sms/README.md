@@ -70,7 +70,9 @@ CSP declares configured ImageX upload hosts and HTTPS `*.volces.com` for TOS, no
 
 ## Outcomes and observations
 
-Read structured outcomes and business statuses. A failed read is not an empty resource list; an accepted send is not delivery. Do not automatically retry a timed-out or uncertain write. Keep IDs and query the original application/task/message.
+Read structured outcomes and business statuses. A failed read is not an empty resource list; an accepted send is not delivery. MCP issues each physical API request once without automatic retries.
+
+SMS errors preserve the original code, message, RequestId and HTTP status, with the complete response in `error.backend_response`. MCP does not infer a final business outcome from error codes or HTTP status, or replace backend errors with an unknown-outcome message. The host agent decides what to do next. Transport failures expose the actual exception type and message. Forms display the original error; aggregate workflows retain the individual API failures.
 
 Tool and physical API boundaries emit start/end logs and OpenTelemetry events with correlation, duration, public error code and request ID. They omit file bytes, message content, phone numbers and credentials; logging failures do not change business results. Client upload logs likewise omit names, URLs and authorization.
 

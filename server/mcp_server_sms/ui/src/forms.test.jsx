@@ -719,14 +719,31 @@ it('历史结果和不支持 Apps 的宿主都不重放业务调用', () => {
 });
 
 describe('标准 AppBridge 调用边界', () => {
-  it.each([undefined, null, 'false', 'true', 0, 1])('缺失或异常结果标记 %s 不能解除写入锁', async flag => {
+  it.each(['1999', 'SY:0500', 1007])('后端错误 %s 保留原文与完整响应，由宿主判断结果', async code => {
+    const message = ' 后端原文\n结果待确认，RequestId 保持原样 ';
+    const backend = { ResponseMetadata: { Error: { Code: code, Message: message, Details: ['原字段'] } } };
+    const app = { callServerTool: vi.fn().mockResolvedValue({ isError: true, structuredContent: {
+      success: false, request_id: 'api-request', error: { code, message, http_status: 503, backend_response: backend },
+    } }) };
+    await expect(new SmsFormClient(app).call('submit_template', {}, { write: true })).rejects.toMatchObject({
+      code, message, requestId: 'api-request', httpStatus: 503, backendResponse: backend, unknown: false,
+    });
+    expect(app.callServerTool).toHaveBeenCalledTimes(1);
+  });
+  it('宿主连接异常保留异常信息，不推断业务最终结果', async () => {
+    const app = { callServerTool: vi.fn().mockRejectedValue(Object.assign(new Error('bridge disconnected'), { code: -32000 })) };
+    await expect(new SmsFormClient(app).call('submit_template', {}, { write: true })).rejects.toMatchObject({
+      message: 'bridge disconnected', code: -32000, unknown: false,
+    });
+  });
+  it.each([undefined, null, 'false', 'true', 0, 1])('不从缺失或异常结果标记 %s 推断业务结果', async flag => {
     const app = { callServerTool: vi.fn().mockResolvedValue({ isError: true, structuredContent: {
       success: false, error: { code: 'fixture', message: '待核对', ...(flag === undefined ? {} : { outcome_unknown: flag }) },
     } }) };
-    await expect(new SmsFormClient(app).call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
+    await expect(new SmsFormClient(app).call('submit_signature', {}, { write: true })).rejects.toMatchObject({ message: '待核对', unknown: false });
     expect(app.callServerTool).toHaveBeenCalledTimes(1);
   });
-  it('只有完整且明确的失败响应允许修改后重新提交', async () => {
+  it('本地参数错误与格式异常都不推断短信业务最终结果', async () => {
     const app = { callServerTool: vi.fn().mockResolvedValue({ isError: true, structuredContent: {
       success: false, error: { code: 'invalid_arguments', message: '参数不完整', outcome_unknown: false },
     } }) };
@@ -734,7 +751,7 @@ describe('标准 AppBridge 调用边界', () => {
     app.callServerTool.mockResolvedValue({ isError: true, structuredContent: {
       success: true, error: { code: 'fixture', message: '矛盾响应', outcome_unknown: false },
     } });
-    await expect(new SmsFormClient(app).call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
+    await expect(new SmsFormClient(app).call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: false });
   });
   it('只从私密元数据读取 OCR，宿主上下文更新失败不改变调用结果', async () => {
     const app = { callServerTool: vi.fn().mockResolvedValue({ structuredContent: { success: true, result: null }, _meta: { 'sms/form': { success: true, result: { personName: 'private' } } } }), updateModelContext: vi.fn().mockRejectedValue(new Error('unsupported')) };
@@ -743,10 +760,10 @@ describe('标准 AppBridge 调用边界', () => {
     await api.report({ form: 'qualification', state: 'submitted', qualificationId: 123 });
     expect(JSON.stringify(app.updateModelContext.mock.calls)).not.toContain('private');
   });
-  it('写操作连接中断保留未知结果且不重试', async () => {
+  it('写操作连接中断透传异常且不自动重试', async () => {
     const app = { callServerTool: vi.fn().mockRejectedValue(new Error('raw transport private data')) };
     const api = new SmsFormClient(app);
-    await expect(api.call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
+    await expect(api.call('submit_signature', {}, { write: true })).rejects.toMatchObject({ message: 'raw transport private data', unknown: false });
     expect(app.callServerTool).toHaveBeenCalledTimes(1);
   });
 });

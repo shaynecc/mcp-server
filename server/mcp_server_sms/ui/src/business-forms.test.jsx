@@ -6,9 +6,38 @@ import { SmsSendForm, smsSendPayload } from './send.jsx';
 import { TemplateForm, templatePayload } from './template.jsx';
 import { BatchForm } from './batch.jsx';
 import { SmsApp } from './app.jsx';
-import { OperationError } from './client.js';
+import { OperationError, SmsFormClient } from './client.js';
 
 afterEach(cleanup);
+
+it('模板提交展示后端 1007 原文与编号，不把错误改成未知结果或自动重试', async () => {
+  const message = '营销模板末尾必须为拒收请回复R且退订关键词必须在模版末尾';
+  const backend = { ResponseMetadata: { RequestId: 'template-request', Error: { Code: '1007', Message: message } } };
+  const app = { callServerTool: vi.fn(async ({ name, arguments: args }) => {
+    if (name === 'submit_template') return { isError: true, structuredContent: {
+      success: false, request_id: 'template-request', error: { code: '1007', message, http_status: 400, backend_response: backend },
+    } };
+    const action = args.request.action;
+    const result = action === 'GetSubAccountListForAgent'
+      ? { list: [{ subAccountId: 'g', subAccountName: '测试消息组' }], total: 1 }
+      : { List: [{ Signature: '测试签名' }], Total: 1 };
+    return { structuredContent: { success: true, result } };
+  }) };
+  const user = userEvent.setup();
+  render(<TemplateForm client={new SmsFormClient(app)} prefill={{ name: '活动通知', content: '活动优惠 回T退订',
+    channelType: 'CN_MKT', signatures: ['测试签名'], subAccounts: ['g'], templateParams: [] }} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '核对模板申请' }).disabled).toBe(false));
+  await user.click(screen.getByRole('button', { name: '核对模板申请' }));
+  await screen.findByRole('button', { name: '确认提交模板' });
+  await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
+  await user.click(screen.getByRole('button', { name: '确认提交模板' }));
+  await screen.findByText(message);
+  expect(screen.getByText('错误码：1007')).toBeTruthy();
+  expect(screen.getByText('HTTP 状态：400')).toBeTruthy();
+  expect(screen.getByText('排障编号：template-request')).toBeTruthy();
+  expect(screen.getByRole('button', { name: '返回修改' }).disabled).toBe(false);
+  expect(app.callServerTool.mock.calls.filter(([call]) => call.name === 'submit_template')).toHaveLength(1);
+});
 const template = { TemplateId: 't', TemplateName: '测试通知', ChannelType: 'CN_NTC', TemplateContent: '预约时间 ${time}' };
 function client() {
   return { report: vi.fn().mockResolvedValue(undefined), query: vi.fn(async action => {

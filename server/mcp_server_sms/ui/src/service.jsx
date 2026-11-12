@@ -12,7 +12,7 @@ const statusLabels = {
   submission_in_progress: '已有请求正在提交，请刷新核对状态',
   submission_outcome_unknown: '上次提交结果待核对，请刷新状态或到控制台查看',
   protocol_confirmation_failed: '部分协议签署失败',
-  activation_rejected: '协议已处理，开通请求未受理',
+  activation_error: '开通接口返回错误',
   product_not_allowed: '当前账号不支持开通此商品',
   product_forced_closed: '短信服务已被关闭，请到控制台核对',
   account_disabled: '账号已停用，请到控制台核对',
@@ -53,6 +53,8 @@ export function ServiceForm({ client }) {
       <h1>国内短信开通与协议更新</h1><p>核对当前账号与待签协议后确认办理。</p>
     </div></header>
     <Feedback operation={operation} />
+    {view?.failure && <Feedback operation={{ error: { ...view.failure.error,
+      requestId: view.failure.request_id, httpStatus: view.failure.error.http_status } }} />}
     <section className="signature-panel">
       {view ? <Summary items={[
         ['账号主体', view.businessName || '以当前登录账号为准'],

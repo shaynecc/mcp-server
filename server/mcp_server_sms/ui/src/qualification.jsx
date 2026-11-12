@@ -279,6 +279,7 @@ export function QualificationForm({ client, prefill }) {
           <div className="sms-check"><Button disabled={operation.busy || operation.uncertain} onClick={() => check('business')}>校验企业信息</Button>
             {tickets.business?.manualReview === true ? <Alert type="warning" content={<>
               企业信息未通过自动校验。核对无误后，可以继续并确认转人工审核。
+              {tickets.business.failure && <div style={{ whiteSpace: 'pre-wrap' }}>{tickets.business.failure.error.message}</div>}
               {tickets.business.code && <div>错误码 {tickets.business.code}</div>}
               {tickets.business.requestId && <div>排障编号 {tickets.business.requestId}</div>}
             </>} /> : tickets.business && <span>校验已通过</span>}

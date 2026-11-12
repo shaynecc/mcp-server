@@ -65,6 +65,18 @@ it.each([7314599, MAX_UPLOAD_BYTES])('材料 %i 字节通过严格宿主限制�
   expect(logs).toContain('start'); expect(logs).toContain('end');
   expect(logs).not.toContain('fixture-file-auth'); expect(logs).not.toContain('proof.png');
 });
+it('上传准备的短信后端错误原样展示，不追加或替换错误文案', async () => {
+  const { app, client, fetch } = fixture();
+  const message = ' 原始上传授权错误\n请联系账号管理员 ';
+  const backend = { ResponseMetadata: { RequestId: 'upload-request', Error: { Code: 'AccessDenied', Message: message } } };
+  app.callServerTool.mockResolvedValue({ isError: true, structuredContent: {
+    success: false, request_id: 'upload-request', error: { code: 'AccessDenied', message, http_status: 403, backend_response: backend },
+  } });
+  await expect(client.upload(selected(new Uint8Array([1, 2, 3])), { kind: 'material', category: 'business' }))
+    .rejects.toMatchObject({ message, code: 'AccessDenied', requestId: 'upload-request', backendResponse: backend, unknown: false });
+  expect(fetch).not.toHaveBeenCalled();
+  expect(app.callServerTool).toHaveBeenCalledTimes(1);
+});
 it('宿主预填文件解码后直传，不重新经过 MCP 参数', async () => {
   const { app, fetch, client } = fixture();
   await client.upload({ name: 'proof.png', data: 'Zml4dHVyZQ==' }, { kind: 'material', category: 'business' });
@@ -93,21 +105,22 @@ it.each(['http://127.0.0.1/upload/v1/x', 'https://evil.example/upload/v1/x', 'ht
     .rejects.toMatchObject({ code: 'invalid_upload_url', unknown: false });
   expect(fetch).not.toHaveBeenCalled(); expect(app.callServerTool).toHaveBeenCalledTimes(1);
 });
-it.each(['prepare', 'transfer', 'confirm'])('%s 失败可以重选，真实业务提交仍保持未知结果锁', async stage => {
+it.each(['prepare', 'transfer', 'confirm'])('%s 失败可以重选，业务提交连接异常保留原文', async stage => {
   const { app, fetch, client } = fixture({ failPrepare: stage === 'prepare', failComplete: stage === 'confirm' });
   if (stage === 'transfer') fetch.mockRejectedValue(new TypeError('fixture-private-error'));
   await expect(client.upload(selected(new Uint8Array([1, 2, 3])), { kind: 'material', category: 'business' }))
-    .rejects.toMatchObject({ unknown: false, message: expect.stringContaining('已填内容会保留') });
+    .rejects.toMatchObject({ unknown: false, message: 'fixture-private-error' });
   expect(fetch).toHaveBeenCalledTimes(stage === 'prepare' ? 0 : 1);
   expect(app.callServerTool).toHaveBeenCalledTimes(stage === 'confirm' ? 2 : 1);
   app.callServerTool.mockRejectedValue(new Error('fixture-private-error'));
-  await expect(client.call('submit_qualification', {}, { write: true })).rejects.toMatchObject({ unknown: true });
+  await expect(client.call('submit_qualification', {}, { write: true })).rejects.toMatchObject({ message: 'fixture-private-error', unknown: false });
 });
 it('HTTP 和业务上传错误均停止，不调用完成确认', async () => {
   const { app, fetch, client } = fixture();
-  fetch.mockResolvedValueOnce({ ok: false, status: 403 });
+  fetch.mockResolvedValueOnce({ ok: false, status: 403, text: async () => 'original upload rejection', headers: new Headers({ 'x-tos-request-id': 'tos-request' }) });
   await expect(client.upload(selected(new Uint8Array([1])), { kind: 'material', category: 'business' }))
-    .rejects.toMatchObject({ code: 'upload_http_error' });
+    .rejects.toMatchObject({ code: 'upload_http_error', message: 'original upload rejection', httpStatus: 403,
+      backendResponse: 'original upload rejection', requestId: 'tos-request' });
   fetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ code: 5000 }) });
   await expect(client.upload(selected(new Uint8Array([1])), { kind: 'material', category: 'business' }))
     .rejects.toMatchObject({ code: 'upload_not_confirmed' });
@@ -120,11 +133,11 @@ it('资质表单上传失败保留输入并允许重新选择，重选成功显�
   await screen.findByText(/当前账号主体/);
   const input = screen.getByLabelText('营业证件');
   fireEvent.change(input, { target: { files: [selected(new Uint8Array([1, 2, 3]))] } });
-  await screen.findByText(/已填内容会保留/);
+  await screen.findByText('fixture network error');
   expect(screen.getByLabelText('资质名称（选填，最多 20 字）').value).toBe('保留的资质名称');
   expect(input.disabled).toBe(false); expect(screen.getByRole('button', { name: '下一步' }).disabled).toBe(false);
   fireEvent.change(input, { target: { files: [selected(new Uint8Array([1, 2, 3]))] } });
   await screen.findByText('proof.png');
-  await waitFor(() => expect(screen.queryByText(/已填内容会保留/)).toBeNull());
+  await waitFor(() => expect(screen.queryByText('fixture network error')).toBeNull());
   expect(app.callServerTool.mock.calls.some(([c]) => c.name === 'submit_qualification')).toBe(false);
 });

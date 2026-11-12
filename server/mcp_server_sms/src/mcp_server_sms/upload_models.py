@@ -123,7 +123,7 @@ class CommitUploadResponse(ApiResult):
 
 
 class SmsRequestError(Exception):
-    """SmsRequestError 只保存已经脱敏的失败结果。"""
+    """SmsRequestError 保留调用边界返回的原始失败结果。"""
 
     def __init__(self, result: dict):
         self.result = result

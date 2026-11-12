@@ -133,7 +133,7 @@ def _group_rendered_contents(
 async def check_batch_traffic(
     call, request: BatchTrafficCheck, *, data: bytes, columns: list[str]
 ) -> dict:
-    """check_batch_traffic 渲染实际正文，按正文去重核对，仅返回覆盖数量与行号。"""
+    """check_batch_traffic 按正文去重核对，保留覆盖数量、行号和原始调用错误。"""
     total, groups = _group_rendered_contents(columns, request.content, data)
     try:
         use_volc_link = await _short_link_mode(call, request)
@@ -143,9 +143,11 @@ async def check_batch_traffic(
         return {
             "totalRows": total, "checkedRows": 0, "failedRows": 0, "uncheckedRows": total,
             "missingResourceRows": 0, "missingRowNumbers": [], "reason": "short_link_mode_unavailable",
+            "failures": [exc.result],
         }
     checked = failed = missing = 0
     missing_lines = []
+    failures = []
     work = iter(groups.items())
 
     async def worker():
@@ -154,7 +156,11 @@ async def check_batch_traffic(
             try:
                 envelope = await call(_TRAFFIC_ACTION, {"content": content, "useVolcLink": use_volc_link})
                 result = TrafficMatches.model_validate(envelope["result"])
-            except (SmsAPIError, ValidationError):
+            except SmsAPIError as exc:
+                failures.append(exc.result)
+                failed += group.count
+                continue
+            except ValidationError:
                 failed += group.count
                 continue
             checked += group.count
@@ -172,4 +178,5 @@ async def check_batch_traffic(
             "totalRows": total, "checkedRows": checked, "failedRows": failed,
             "uncheckedRows": total - checked - failed, "missingResourceRows": missing,
             "missingRowNumbers": sorted(missing_lines)[:_ROW_SAMPLE_LIMIT],
+            **({"failures": failures} if failures else {}),
         }

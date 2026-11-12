@@ -297,6 +297,11 @@ export function BatchForm({ client, prefill, initialTask }) {
           缺少资源 {trafficReport.missingResourceRows} 行，查询失败 {trafficReport.failedRows} 行，未覆盖 {trafficReport.uncheckedRows} 行。
           {trafficReport.missingRowNumbers?.length > 0 && <div>缺少资源的 CSV 行号 {trafficReport.missingRowNumbers.join('、')}</div>}
           {trafficReport.reason === 'short_link_mode_unavailable' && <div>当前模板的短链配置暂不可核对，引流检查未覆盖本次名单。</div>}
+          {trafficReport.failures?.map((failure, index) => <div key={index} style={{ whiteSpace: 'pre-wrap' }}>
+            {failure.error.message}
+            {failure.error.code != null && <div>错误码：{failure.error.code}</div>}
+            {failure.request_id && <div>排障编号：{failure.request_id}</div>}
+          </div>)}
         </>} />}
       </Confirm></section> : <>
         <section className="batch-section"><h2>任务与模板</h2><div className="form-grid">

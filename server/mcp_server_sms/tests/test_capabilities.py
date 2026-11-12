@@ -385,10 +385,12 @@ async def test_tool_and_api_observations_share_correlation_without_private_data(
 @pytest.mark.parametrize(
     "result", [{"taskId": "task"}, {"taskId": "task", "totalCount": True, "dupCount": 0}]
 )
-def test_missing_or_invalid_batch_counts_leave_write_outcome_unknown(result):
+def test_missing_or_invalid_batch_counts_return_response_without_outcome_guess(result):
     response = httpx.Response(200, json={"ResponseMetadata": {}, "Result": result})
     decoded = SmsClient.decode("SetBatchTaskForAgent", response, Credentials("ak", "sk"))
-    assert decoded["error"]["outcome_unknown"] is True
+    assert decoded["error"]["code"] == "invalid_response"
+    assert "outcome_unknown" not in decoded["error"]
+    assert decoded["error"]["backend_response"]["Result"] == result
 
 
 def test_empty_counts_are_valid_and_private_resource_fields_are_removed():
@@ -427,7 +429,7 @@ def test_empty_counts_are_valid_and_private_resource_fields_are_removed():
     }
 
 
-def test_uncertain_api_error_has_same_outcome_at_tool_and_api_boundaries(caplog):
+def test_backend_error_reaches_mcp_without_message_replacement_or_outcome_guess(caplog):
     calls = []
 
     def respond(request):
@@ -460,7 +462,14 @@ def test_uncertain_api_error_has_same_outcome_at_tool_and_api_boundaries(caplog)
             },
         )
     assert response.json()["result"]["isError"]
-    assert '"outcome_unknown": true' in response.json()["result"]["content"][0]["text"]
+    failure = response.json()["result"]["structuredContent"]
+    assert failure["error"]["message"] == "private"
+    assert failure["error"]["backend_response"]["ResponseMetadata"]["Error"] == {
+        "Code": "1999", "Message": "private",
+    }
+    assert "outcome_unknown" not in failure["error"]
+    assert json.loads(response.json()["result"]["content"][0]["text"]) == failure
+    assert "private" not in caplog.text
     assert len(calls) == 1
     ends = [
         json.loads(record.getMessage().removeprefix("sms_call "))
@@ -470,7 +479,7 @@ def test_uncertain_api_error_has_same_outcome_at_tool_and_api_boundaries(caplog)
     ends = [event for event in ends if event["event"] == "end"]
     assert {event["kind"] for event in ends} == {"api", "tool"}
     assert all(
-        event["result_class"] == "unknown"
+        event["result_class"] == "failed"
         and event["error_code"] == "1999"
         and event["request_id"] == "fixture-uncertain"
         for event in ends
@@ -579,7 +588,10 @@ async def test_service_results_must_match_the_submitted_targets(action, params, 
         return httpx.Response(200, json={"Result": result})
     async with SmsClient(transport=httpx.MockTransport(respond)) as api:
         outcome = await api.call(action, params, Credentials("ak", "sk"))
-    assert outcome["success"] is False and outcome["error"]["outcome_unknown"] is True
+    assert outcome["success"] is False
+    assert outcome["error"]["code"] == "invalid_response"
+    assert "outcome_unknown" not in outcome["error"]
+    assert outcome["error"]["backend_response"]["Result"] == result
     assert len(calls) == 1 and json.loads(calls[0].content) == params
 
 

@@ -6,9 +6,9 @@ import { failureSchema, materialUploadPlanSchema, recipientsUploadPlanSchema } f
 export const MAX_UPLOAD_BYTES = config.maxUploadBytes;
 
 export class OperationError extends Error {
-  constructor(message, { code, unknown = false, requestId } = {}) {
+  constructor(message, { code, unknown = false, requestId, backendResponse, httpStatus } = {}) {
     super(message);
-    Object.assign(this, { code, unknown, requestId });
+    Object.assign(this, { code, unknown, requestId, backendResponse, httpStatus });
   }
 }
 
@@ -25,18 +25,20 @@ export class SmsFormClient {
         signal: this.controller.signal, timeout: 180000,
       });
     } catch (cause) {
-      throw new OperationError(write ? '操作结果待确认，请先查询，勿重复提交。' : '查询未完成，请检查连接后重试。', {
-        unknown: write, code: typeof cause?.code === 'number' ? String(cause.code) : 'tool_transport_error',
+      throw new OperationError(cause instanceof Error ? cause.message : String(cause), {
+        code: cause?.code,
       });
     }
     const envelope = response._meta?.['sms/form'] ?? response.structuredContent;
     if (response.isError || envelope?.success !== true) {
       const checked = failureSchema.safeParse(envelope);
       const error = checked.success ? checked.data.error : null;
-      throw new OperationError(error?.message ?? '参数校验或工具调用未完成，请检查表单。', {
+      throw new OperationError(checked.success ? error.message ?? '' : '参数校验或工具调用未完成，请检查表单。', {
         code: error?.code,
-        unknown: write && (!checked.success || error.outcome_unknown !== false),
+        unknown: write && error?.outcome_unknown === true,
         requestId: envelope?.request_id,
+        backendResponse: error?.backend_response,
+        httpStatus: error?.http_status,
       });
     }
     return envelope.result;
@@ -85,12 +87,8 @@ export class SmsFormClient {
       if (!valid) throw new OperationError('文件上传结果不完整，请重新选择文件。', { code: 'invalid_upload_result' });
       return result;
     } catch (cause) {
-      const known = cause instanceof OperationError;
-      throw new OperationError(
-        (known && !cause.unknown ? cause.message : '文件上传未完成或结果未确认。')
-          + ' 已填内容会保留，可重新选择文件。',
-        { code: known ? cause.code : 'upload_failed', requestId: known ? cause.requestId : undefined },
-      );
+      if (cause instanceof OperationError) throw cause;
+      throw new OperationError(cause instanceof Error ? cause.message : String(cause), { code: 'upload_failed' });
     }
   }
 
@@ -114,7 +112,9 @@ export class SmsFormClient {
       });
       httpStatus = response.status;
       if (!response.ok) {
-        throw new OperationError(`文件上传服务返回 HTTP ${response.status}。`, { code: 'upload_http_error' });
+        const body = await response.text();
+        throw new OperationError(body, { code: 'upload_http_error', httpStatus,
+          backendResponse: body, requestId: response.headers.get('x-tos-request-id') ?? response.headers.get('x-tt-logid') });
       }
       if (material) {
         const result = await response.json();
@@ -125,7 +125,7 @@ export class SmsFormClient {
     } catch (cause) {
       errorCode = cause instanceof OperationError ? cause.code : 'upload_transport_error';
       throw cause instanceof OperationError ? cause
-        : new OperationError('文件传输未完成，请检查网络或客户端的上传域名许可。', { code: errorCode });
+        : new OperationError(cause instanceof Error ? cause.message : String(cause), { code: errorCode });
     } finally {
       this.uploadLog({ ...fields, event: 'end', duration_ms: Math.round(performance.now() - started),
         result_class: errorCode ? 'failed' : 'success', error_code: errorCode, http_status: httpStatus });
