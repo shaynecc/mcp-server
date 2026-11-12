@@ -3,7 +3,7 @@
   "maxConcurrentUploads": 2,
   "recipientsUpload": {
     "confirmationTtlSeconds": 3600,
-    "connectDomains": ["https://*.volces.com"]
+    "connectDomains": ["https://batch-sms-bucket.tos-cn-beijing.volces.com"]
   },
   "smsOnboarding": {
     "consoleUrl": "https://console.volcengine.com/sms",

@@ -205,7 +205,8 @@ def test_ui_resource_is_self_contained_and_uses_standard_apps_metadata(api_calls
     content = response.json()["result"]["contents"][0]
     assert content["mimeType"] == "text/html;profile=mcp-app"
     assert content["_meta"]["ui"]["csp"]["connectDomains"] == [
-        *("https://" + host for host in IMAGEX["uploadHosts"]), "https://*.volces.com",
+        *("https://" + host for host in IMAGEX["uploadHosts"]),
+        "https://batch-sms-bucket.tos-cn-beijing.volces.com",
     ]
     assert content["_meta"]["ui"]["csp"]["resourceDomains"] == []
     assert '<script type="module"' in content["text"]

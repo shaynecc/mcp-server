@@ -1,6 +1,6 @@
 {
   "sources": {
-    "src/mcp_server_sms/form_config.json": "18410ef4e1711faa53b3718728f4ee347c93de069375a1e2234362a98e0e31be",
+    "src/mcp_server_sms/form_config.json": "a6b9f6f6d52fb4b903c3045377e89f1153614d3ae4bf5ea1eca0933cc105fcf8",
     "ui/forms.html": "8786fcb7dc135c8ec7239384fd5b2f3a270f40cb2e14d318aeb4797bf3bfa83c",
     "ui/package-lock.json": "24f39b8aab1f03d001e12e5a3a6484f439042a47804c3552bc2f53b88edcc697",
     "ui/package.json": "50389679a22acc9db527157a8a955145dbec8e136404f8c720f5a3ecb92bcccb",
@@ -26,5 +26,5 @@
     "ui/src/traffic.jsx": "5f9dc49c6dde21ca15ede8b69202038a7466656f9fa7f51af6bfd932499b1544",
     "ui/vite.config.js": "5f77a501a6146592b57bff3f4f67552c0017f7b7b6bfcca10ed7bf40ecbf77be"
   },
-  "htmlSha256": "13733790377229ca5b47fb7c62dd28471cf12171ad87f3b99a91ac5de4345089"
+  "htmlSha256": "663201af24cb497994d55fe26c407b158ad61513166c26be7c52944f60f18651"
 }

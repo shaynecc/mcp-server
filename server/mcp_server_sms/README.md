@@ -66,7 +66,7 @@ CSV checks run when the customer reviews the batch task. `complete_recipients_up
 
 Files are limited to 10 MiB; at most two buffered CSV read/validation operations per instance. Material size is checked in the UI and request metadata; actual storage limits are owned by ImageX. Upload references are signed with the current caller credentials, with material expiry at 10 minutes and CSV at one hour. Credential refresh requires a new upload. Upload failure preserves form inputs and permits explicit reselection; it does not submit an application/task or automatically retry.
 
-CSP declares configured ImageX upload hosts and HTTPS `*.volces.com` for TOS, no external scripts/styles. Host CSP support and storage CORS must be verified in the real client. There is no `/files` route, caller-provided download URL, filesystem access, persistent upload state or server-side draft. Ordinary chat attachments are not automatically material references.
+CSP declares configured ImageX upload hosts and the complete TOS bucket origin `https://batch-sms-bucket.tos-cn-beijing.volces.com`, with no external scripts/styles. Explicit origins avoid hosts percent-encoding wildcard `*` as `%2A`, which browsers reject as an invalid CSP source. Host CSP support and storage CORS must be verified in the real client. There is no `/files` route, caller-provided download URL, filesystem access, persistent upload state or server-side draft. Ordinary chat attachments are not automatically material references.
 
 ## Outcomes and observations
 
