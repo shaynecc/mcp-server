@@ -8,7 +8,7 @@ import { QualificationForm, qualificationPreview } from './qualification.jsx';
 import { SignatureForm, signaturePreview } from './signature.jsx';
 import { BatchForm, batchPayload } from './batch.jsx';
 import { OperationError, SmsFormClient, page } from './client.js';
-import { batchTemplateSchema, qualificationSchema } from './contracts.js';
+import { batchTemplateSchema, signatureQualificationSchema } from './contracts.js';
 
 afterEach(cleanup);
 const rank = Object.fromEntries(['isOnlyTwoElement', 'isSkipOtherUse', 'needOtherUseCheck', 'operatorThreeElement', 'needOperatorImage', 'needOperatorMobile', 'responsibleThreeElement', 'needResponsibleImage', 'needResponsibleMobile', 'needBusinessCertificateImage'].map(key => [key, false]));
@@ -17,6 +17,14 @@ const business = { businessCertificateType: 1, businessCertificateName: '测试�
 
 function client(overrides = {}) {
   return { call: vi.fn(), query: vi.fn(), upload: vi.fn(), downloadCsv: vi.fn(), report: vi.fn().mockResolvedValue(undefined), ...overrides };
+}
+function uploadedRecipients(name, file) {
+  return { name, file, receipt: { signature: 'fixture-' + file,
+    context: { name, file, expires_at: 9999999999 } } };
+}
+function checkedRecipients(args, totalCount = 1) {
+  return { name: args.request.context.name, file: args.request.context.file,
+    receipt: args.request, totalCount, dupCount: 0 };
 }
 function openDraft(form, prefill) {
   return { structuredContent: { form, mode: 'input' }, _meta: { 'sms/form': { prefill } } };
@@ -46,9 +54,9 @@ it('引流必须先预览并勾选确认，重复点击只提交一次', async (
   await user.dblClick(submit);
   expect(api.call).toHaveBeenCalledTimes(2);
   expect(api.call.mock.calls[1][1].request.params.data[0].link).toBe('https://example.com/Path?Q=One');
-  resolve({ resourceIds: [17], verified: true });
-  await screen.findByText('引流资源已录入并核对');
-  expect(api.report).toHaveBeenCalledWith({ form: 'traffic', state: 'verified', kind: 'link', count: 1, resourceIds: [17] });
+  resolve('');
+  await screen.findByText('引流录入已受理');
+  expect(api.report).toHaveBeenCalledWith({ form: 'traffic', state: 'accepted', kind: 'link', count: 1 });
 });
 
 it('未知写入结果不会解锁重试或返回修改', async () => {
@@ -86,7 +94,7 @@ it('资质表单通过校验后仍需用户确认，模型上下文只收到申�
     if (name === 'get_qualification_requirements') return rank;
     if (name === 'get_account_information') return { businessName: '测试企业', userType: 'enterprise' };
     if (name === 'check_qualification_enterprise' || name === 'check_qualification_person') return { status: 0, ticket: 'private-ticket' };
-    if (name === 'apply_qualification') return 123;
+    if (name === 'submit_qualification') return 123;
     throw new Error('unexpected call');
   }) });
   render(<QualificationForm client={api} prefill={{ legalPerson: {
@@ -111,11 +119,11 @@ it('资质表单通过校验后仍需用户确认，模型上下文只收到申�
   expect(document.activeElement).toBe(screen.getByRole('heading', { name: '授权与补充材料', exact: true }));
   await user.click(screen.getByRole('button', { name: '核对申请信息' }));
   expect(screen.queryByText('不提交的证件.png')).toBeNull();
-  expect(api.call.mock.calls.filter(([name]) => name === 'apply_qualification')).toHaveLength(0);
+  expect(api.call.mock.calls.filter(([name]) => name === 'submit_qualification')).toHaveLength(0);
   await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await screen.findByText('资质申请已提交');
-  const request = api.call.mock.calls.find(([name]) => name === 'apply_qualification')[1].request;
+  const request = api.call.mock.calls.find(([name]) => name === 'submit_qualification')[1].request;
   expect(request.legalPerson).toBeUndefined();
   expect(request.operatorPerson.personIDCard).toBe('fixture-identity');
   expect(request.responsibleCheckTicket).toBe('private-ticket');
@@ -124,34 +132,99 @@ it('资质表单通过校验后仍需用户确认，模型上下文只收到申�
 
 it('签名申请使用已选资质的归属和私密附件，不修改原始签名', () => {
   const values = { content: '测试签名', source: 2, appIcpFilling: '备案一号' };
-  const qualification = { id: 12, purpose: 2, usable: true, auditStatus: 3, businessCertificateName: '示例测试签名公司' };
+  const qualification = { id: 12, purpose: 2, materialName: '示例资质', businessCertificateName: '示例测试签名公司' };
   const { request: result, attachmentNames } = signaturePreview(values, qualification, 'all', { app: [{ fileContent: 'private/app', fileSuffix: 'png', name: 'app.png' }], trademark: [], other: [] });
   expect(result).toMatchObject({ content: '测试签名', purpose: 2, signatureIdentificationID: 12, isLimitSubAccount: 0, subAccounts: [] });
   expect(result.appIcp.appIcpFileList).toEqual([{ fileType: 16, fileContent: 'private/app', fileSuffix: 'png' }]);
   expect(attachmentNames).toEqual(['app.png']);
-  expect(() => signaturePreview(values, { ...qualification, usable: false }, 'all', { app: [], trademark: [], other: [] })).toThrow('可用的资质');
+  expect(() => signaturePreview(values, { ...qualification, purpose: 3 }, 'all', { app: [], trademark: [], other: [] })).toThrow('审核通过的资质');
 });
 
 it('签名表单保留消息组范围选择和提交前确认', async () => {
   const user = userEvent.setup();
-  const api = client({ call: vi.fn(async name => name === 'list_qualifications'
-    ? { list: [{ id: 12, materialName: '示例资质', businessCertificateName: '示例企业', purpose: 1, auditStatus: 3, usable: true }], total: 1 }
-    : { applyId: 'application', status: 1 }), query: vi.fn().mockResolvedValue({
-    list: [{ subAccountId: 'group', subAccountName: '唯一启用组' }], total: 1,
-  }) });
+  const api = client({ call: vi.fn().mockResolvedValue({ applyId: 'application', status: 1 }),
+    query: vi.fn(async action => action === 'GetApplySignatureBind'
+      ? [{ id: 12, materialName: '示例资质', businessCertificateName: '示例企业', purpose: 1 }]
+      : { list: [{ subAccountId: 'group', subAccountName: '唯一启用组' }], total: 1 }),
+  });
   render(<SignatureForm client={api} />);
   await screen.findByText('唯一启用组');
   expect(screen.getByLabelText('签名内容').value).toBe('示例企业');
   await user.clear(screen.getByLabelText('签名内容'));
   await type(user, '签名内容', '测试签名');
   await user.click(screen.getByRole('button', { name: '核对申请信息' }));
-  expect(api.call.mock.calls.filter(([name]) => name === 'apply_signature')).toHaveLength(0);
+  expect(api.call.mock.calls.filter(([name]) => name === 'submit_signature')).toHaveLength(0);
   await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
   const submit = screen.getByRole('button', { name: '确认承担风险并提交' });
   expect(submit.disabled).toBe(true);
   await user.click(screen.getByText('我了解签名可能审核或报备失败，仍要提交'));
   await user.click(submit);
   await screen.findByText('签名申请结果');
+  expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toEqual([
+    ['GetApplySignatureBind', {}],
+  ]);
+  expect(api.call).toHaveBeenCalledTimes(1);
+  expect(api.call).toHaveBeenCalledWith('submit_signature', {
+    request: expect.objectContaining({ signatureIdentificationID: 12, purpose: 1, content: '测试签名' }),
+  }, { write: true });
+});
+
+it('签名候选一次读取完整数组，超过一百条的预填资质也不补查', async () => {
+  const rows = Array.from({ length: 128 }, (_, index) => ({
+    id: index + 1, purpose: 1, materialName: `资质${index + 1}`,
+    businessCertificateName: `主体${index + 1}`,
+  }));
+  const api = client({ query: vi.fn(async action => action === 'GetApplySignatureBind'
+    ? rows : { list: [], total: 0 }) });
+  render(<SignatureForm client={api} prefill={{ signatureIdentificationID: 128, isLimitSubAccount: 0 }} />);
+  await screen.findByText('资质128 · 自用');
+  expect(screen.getByLabelText('签名内容').value).toBe('主体128');
+  expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toEqual([
+    ['GetApplySignatureBind', {}],
+  ]);
+  expect(api.call).not.toHaveBeenCalled();
+});
+
+it.each([[null], [[]]])('签名候选为空时不补查完整资质列表或生成默认选项：%s', async candidates => {
+  const user = userEvent.setup();
+  const api = client({ query: vi.fn(async action => action === 'GetApplySignatureBind'
+    ? candidates : { list: [], total: 0 }) });
+  render(<SignatureForm client={api} prefill={{ content: '测试签名', isLimitSubAccount: 0 }} />);
+  await waitFor(() => expect(screen.getByRole('button', { name: '核对申请信息' }).disabled).toBe(false));
+  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
+  await screen.findByText('请选择审核通过的资质。');
+  expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toHaveLength(1);
+  expect(api.call).not.toHaveBeenCalled();
+});
+
+it('失效的预填资质不触发详情补查，也不自动改选其他资质', async () => {
+  const api = client({ query: vi.fn(async action => action === 'GetApplySignatureBind'
+    ? [{ id: 12, purpose: 1, materialName: '可用资质', businessCertificateName: '示例企业' }]
+    : { list: [], total: 0 }) });
+  render(<SignatureForm client={api} prefill={{ signatureIdentificationID: 99 }} />);
+  await screen.findByText('预填资质当前不可用，请重新选择。');
+  expect(screen.getByLabelText('签名内容').value).toBe('');
+  expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toHaveLength(1);
+  expect(api.call).not.toHaveBeenCalled();
+});
+
+it('签名候选拒绝分页对象，不把旧接口响应当作新接口数组', async () => {
+  const api = client({ query: vi.fn().mockResolvedValue({ list: [], total: 0 }) });
+  render(<SignatureForm client={api} />);
+  await screen.findByText('资质候选返回不完整，请重新查询。');
+  expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toHaveLength(1);
+  expect(api.call).not.toHaveBeenCalled();
+});
+
+it('候选接口不可用时显示查询错误，不回退到完整资质列表', async () => {
+  const api = client({ query: vi.fn(async action => {
+    if (action === 'GetApplySignatureBind') throw new OperationError('候选接口尚不可用。', { code: 'InvalidActionOrVersion' });
+    return { list: [], total: 0 };
+  }) });
+  render(<SignatureForm client={api} />);
+  await screen.findByText('候选接口尚不可用。');
+  expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toHaveLength(1);
+  expect(api.call).not.toHaveBeenCalled();
 });
 
 it('群发创建、启动和启动后取消分别要求确认', async () => {
@@ -164,15 +237,16 @@ it('群发创建、启动和启动后取消分别要求确认', async () => {
       if (action === 'ListSignaturesForAgent') return { List: [{ Signature: '测试签名' }], Total: 1 };
       return { List: [{ TemplateId: 't', TemplateName: '通知模板', ChannelType: 'CN_NTC', TemplateContent: '原始正文', TaskFields: [] }], Total: 1 };
     }),
-    call: vi.fn(async name => {
-      if (name === 'get_batch_csv_template') return { value: 'phone\n13800000000\n' };
+    call: vi.fn(async (name, args) => {
+      if (name === 'complete_recipients_upload') return checkedRecipients(args);
+      if (name === 'get_batch_csv_template') return { value: 'phone\n13800000000\n', variables: [] };
       if (name === 'create_batch_task') return { taskId: 'task-1', totalCount: 1, dupCount: 0 };
       if (name === 'start_batch_task') { started = true; return null; }
       if (name === 'cancel_batch_task') { cancelled = true; return null; }
-      if (name === 'get_batch_task') return { taskId: 'task-1', subAccount: 'g', templateId: 't', sendContent: '实际任务正文', status: cancelled ? 7 : started ? 3 : 2 };
+      if (name === 'query_batch_tasks') return { taskId: 'task-1', subAccount: 'g', templateId: 't', sendContent: '实际任务正文', status: cancelled ? 7 : started ? 3 : 2 };
       throw new Error('unexpected call');
     }),
-    upload: vi.fn().mockResolvedValue({ name: 'list.csv', file: 'private/list.csv', totalCount: 1, dupCount: 0 }),
+    upload: vi.fn().mockResolvedValue(uploadedRecipients('list.csv', 'private/list.csv')),
   });
   render(<BatchForm client={api} />);
   await waitFor(() => expect(api.query).toHaveBeenCalled());
@@ -182,8 +256,13 @@ it('群发创建、启动和启动后取消分别要求确认', async () => {
   await choose(user, '群发模板', '通知模板');
   await screen.findByRole('button', { name: '下载名单模板' });
   fireEvent.change(screen.getByLabelText('群发 CSV 名单'), { target: { files: [new File(['phone\n13800000000\n'], 'list.csv', { type: 'text/csv' })] } });
-  await screen.findByText(/已校验 1 条记录/);
+  await screen.findByText('名单已上传，核对群发任务时将检查文件内容。');
   await user.click(screen.getByRole('button', { name: '核对群发任务' }));
+  await screen.findByRole('button', { name: '确认创建任务' });
+  await user.click(screen.getByRole('button', { name: '返回修改' }));
+  await user.click(screen.getByRole('button', { name: '核对群发任务' }));
+  await screen.findByRole('button', { name: '确认创建任务' });
+  expect(api.call.mock.calls.filter(([name]) => name === 'complete_recipients_upload')).toHaveLength(1);
   await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
   await user.click(screen.getByRole('button', { name: '确认创建任务' }));
   await screen.findByText('群发任务已创建');
@@ -252,19 +331,18 @@ it('宿主预填资质的企业、人员及材料，校验和上传仍由用户�
   expect(api.upload).toHaveBeenCalledWith(draft('委托书.png'), { kind: 'material', category: 'authorization' });
   await user.click(screen.getByRole('button', { name: '核对申请信息' }));
   expect(await screen.findByText('请先完成企业信息校验。')).toBeTruthy();
-  expect(api.call).not.toHaveBeenCalledWith('apply_qualification', expect.anything(), expect.anything());
+  expect(api.call).not.toHaveBeenCalledWith('submit_qualification', expect.anything(), expect.anything());
 });
 
 it('宿主预填签名、适用消息组和证明材料，真实查询后才选中资源', async () => {
   const user = userEvent.setup();
   const proof = { name: '商标证明.pdf', data: 'Zml4dHVyZQ==' };
   const api = client({
-    call: vi.fn(async (name, args) => args.qualification_id
-      ? { list: [{ id: 12, purpose: 1, auditStatus: 3, usable: true, materialName: '可用资质', businessCertificateName: '宿主填写的签名公司' }], total: 1 }
-      : { list: [], total: 1 }),
-    query: vi.fn(async (action, params) => params.subAccount
-      ? { list: [{ subAccountId: 'g', subAccountName: '已核实的消息组' }], total: 1 }
-      : { list: [], total: 1 }),
+    query: vi.fn(async (action, params) => action === 'GetApplySignatureBind'
+      ? [{ id: 12, purpose: 1, materialName: '可用资质', businessCertificateName: '宿主填写的签名公司' }]
+      : params.subAccount
+        ? { list: [{ subAccountId: 'g', subAccountName: '已核实的消息组' }], total: 1 }
+        : { list: [], total: 1 }),
     upload: vi.fn().mockResolvedValue({ name: proof.name, fileContent: 'fixture/proof', fileSuffix: 'pdf' }),
   });
   render(<SmsApp client={api} ready supported toolResult={openDraft('signature', {
@@ -295,7 +373,8 @@ it('宿主预填签名、适用消息组和证明材料，真实查询后才选�
   await user.click(screen.getByRole('button', { name: '核对申请信息' }));
   expect((await screen.findByRole('button', { name: '确认提交' })).disabled).toBe(true);
   expect(screen.queryByText('商标证明.pdf')).toBeNull();
-  expect(api.call.mock.calls.every(([name]) => name === 'list_qualifications')).toBe(true);
+  expect(api.call).not.toHaveBeenCalled();
+  expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toHaveLength(1);
 });
 
 it('宿主预填引流链接，普通链接与火山短链保留各自行的备案信息', async () => {
@@ -360,8 +439,8 @@ it('群发表单保留部分预填，选消息组后再核对签名、模板和�
       if (action === 'ValidateBatchTaskContentForAgent') return { Approved: true };
       return { List: [template], Total: 1 };
     }),
-    call: vi.fn().mockResolvedValue({ value: 'phone\n' }),
-    upload: vi.fn().mockResolvedValue({ name: list.name, file: 'verified/list.csv', totalCount: 1, dupCount: 0 }),
+    call: vi.fn(async (name, args) => name === 'complete_recipients_upload' ? checkedRecipients(args) : { value: 'phone\n', variables: [] }),
+    upload: vi.fn().mockResolvedValue(uploadedRecipients(list.name, 'verified/list.csv')),
   });
   render(<SmsApp client={api} ready supported toolResult={openDraft('batch', {
     name: '双十一通知', signature: '已知签名', templateId: 't', content: ' 保留原文 ',
@@ -377,12 +456,12 @@ it('群发表单保留部分预填，选消息组后再核对签名、模板和�
   expect(screen.getByLabelText('任务正文').value).toBe(' 保留原文 ');
   expect(api.upload).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: '上传 宿主名单.csv' }));
-  expect(await screen.findByText(/已校验 1 条记录/)).toBeTruthy();
+  expect(await screen.findByText('名单已上传，核对群发任务时将检查文件内容。')).toBeTruthy();
   expect(api.upload).toHaveBeenCalledWith(list, { kind: 'recipients', sub_account: 'g', template_id: 't' });
   await user.click(screen.getByRole('button', { name: '核对群发任务' }));
   expect((await screen.findByRole('button', { name: '确认创建任务' })).disabled).toBe(true);
   expect(screen.getByText(/10:15:13（北京时间）/)).toBeTruthy();
-  expect(api.call.mock.calls.every(([name]) => name === 'get_batch_csv_template')).toBe(true);
+  expect(api.call.mock.calls.map(([name]) => name)).toEqual(['get_batch_csv_template', 'complete_recipients_upload']);
 });
 
 it('群发表单预选首屏以外的已核实资源，并允许用户重新选择', async () => {
@@ -405,7 +484,7 @@ it('群发表单预选首屏以外的已核实资源，并允许用户重新选�
       }
       return params.TemplateId ? { List: [template], Total: 1 } : { List: [], Total: 1 };
     }),
-    call: vi.fn().mockResolvedValue({ value: 'phone\n' }),
+    call: vi.fn().mockResolvedValue({ value: 'phone\n', variables: [] }),
   });
   render(<SmsApp client={api} ready supported toolResult={openDraft('batch', {
     subAccount: 'chosen-group', signature: '预填签名', templateId: 'chosen-template',
@@ -456,7 +535,7 @@ it('名单示例首次查询失败后，可重选精查到的同一个模板', a
       return params.TemplateId ? { List: [template], Total: 1 } : { List: [], Total: 1 };
     }),
     call: vi.fn().mockRejectedValueOnce(new OperationError('名单示例暂未取得'))
-      .mockResolvedValueOnce({ value: 'phone\n' }),
+      .mockResolvedValueOnce({ value: 'phone\n', variables: [] }),
   });
   render(<BatchForm client={api} prefill={{ subAccount: 'g', signature: '可用签名', templateId: 't' }} />);
   await screen.findByText('名单示例暂未取得');
@@ -476,7 +555,7 @@ it('企业校验未通过时，只有客户额外确认才转人工审核', asyn
     if (name === 'get_account_information') return { businessName: '测试企业', userType: 'enterprise' };
     if (name === 'check_qualification_enterprise') return { manualReview: true, code: 'enterprise_check_mismatch', requestId: 'test-check' };
     if (name === 'check_qualification_person') return { status: 0, ticket: 'person-check' };
-    if (name === 'apply_qualification') return 123;
+    if (name === 'submit_qualification') return 123;
     throw new Error('unexpected tool');
   }) });
   render(<QualificationForm client={api} prefill={{ businessInfo: business, operatorPerson: record }} />);
@@ -492,7 +571,7 @@ it('企业校验未通过时，只有客户额外确认才转人工审核', asyn
   expect(submit.disabled).toBe(true);
   await user.click(screen.getByText('我已核对企业信息，同意转人工审核'));
   await user.click(submit);
-  const [, args] = api.call.mock.calls.find(([name]) => name === 'apply_qualification');
+  const [, args] = api.call.mock.calls.find(([name]) => name === 'submit_qualification');
   expect(args).toMatchObject({ confirm_manual_review: true, request: { operatorCheckTicket: 'person-check' } });
   expect(args.request.businessCheckTicket).toBeUndefined();
 });
@@ -528,16 +607,16 @@ it('群发试发须单独确认，查询对应回执，名单引流检查与正�
       if (action === 'ListSignaturesForAgent') return { List: [{ Signature: '签名' }], Total: 1 };
       return { List: [template], Total: 1 };
     }),
-    call: vi.fn(async name => {
+    call: vi.fn(async (name, args) => {
       if (name === 'get_batch_csv_template') return { value: 'phone,url\n', variables: ['url'] };
       if (name === 'send_batch_test_sms') return { messageId: 'test-sms-id', requestedAt: 1000 };
       if (name === 'list_send_logs') return { List: [{ messageId: 'test-sms-id', status: 3 }], Total: 1 };
-      if (name === 'check_batch_traffic_resources') {
-        return { checkedRows: 1, totalRows: 2, failedRows: 0, uncheckedRows: 1, missingResourceRows: 1, missingRowNumbers: [2] };
+      if (name === 'complete_recipients_upload') {
+        return { ...checkedRecipients(args, 2), trafficReport: { checkedRows: 1, totalRows: 2, failedRows: 0, uncheckedRows: 1, missingResourceRows: 1, missingRowNumbers: [2] } };
       }
       throw new Error('unexpected write');
     }),
-    upload: vi.fn().mockResolvedValue({ name: '预填名单.csv', file: 'private-file', totalCount: 2, dupCount: 0 }),
+    upload: vi.fn().mockResolvedValue(uploadedRecipients('预填名单.csv', 'private-file')),
   });
   const file = { name: '预填名单.csv', data: 'Zml4dHVyZQ==' };
   render(<BatchForm client={api} prefill={{
@@ -558,12 +637,22 @@ it('群发试发须单独确认，查询对应回执，名单引流检查与正�
   await user.click(screen.getByRole('button', { name: '上传 预填名单.csv' }));
   await user.click(screen.getByRole('button', { name: '核对群发任务' }));
   await screen.findByText('缺少资源的 CSV 行号 2');
-  expect(api.call).toHaveBeenCalledWith('check_batch_traffic_resources', { request: expect.objectContaining({ file, template_id: 't' }) });
+  expect(api.call).toHaveBeenCalledWith('complete_recipients_upload', { request: expect.objectContaining({ signature: 'fixture-private-file' }), columns: ['phone', 'url'], traffic: expect.objectContaining({ template_id: 't', content: '查看 ${url}' }) });
   expect(screen.getByRole('button', { name: '确认创建任务' }).disabled).toBe(true);
+  await user.click(screen.getByRole('button', { name: '返回修改' }));
+  await user.click(screen.getByRole('button', { name: '核对群发任务' }));
+  await screen.findByText('缺少资源的 CSV 行号 2');
+  expect(api.call.mock.calls.filter(([name]) => name === 'complete_recipients_upload')).toHaveLength(2);
   await user.click(screen.getByRole('button', { name: '返回修改' }));
   expect(screen.getByText('已收到成功回执')).toBeTruthy();
   await user.click(screen.getByRole('button', { name: '刷新试发回执' }));
   expect(api.call.mock.calls.filter(([name]) => name === 'list_send_logs')).toHaveLength(2);
+  expect(api.query.mock.calls.filter(([action]) => action === 'ListBatchTemplatesForAgent')).toHaveLength(1);
+  expect(api.call.mock.calls.filter(([name]) => name === 'get_batch_csv_template')).toHaveLength(1);
+  expect(api.call).toHaveBeenCalledWith('send_batch_test_sms', { request: {
+    sub_account: 'g', signature: '签名', template_id: 't', mobile: '13800000000',
+    template_params: { url: 'https://example.com/test' },
+  } }, { write: true });
 });
 
 it('特殊通知保持任务正文和幂等键，拒绝未知任务字段', () => {
@@ -573,9 +662,48 @@ it('特殊通知保持任务正文和幂等键，拒绝未知任务字段', () =
   expect(() => batchPayload(values, { ...template, TaskFields: [{ Name: 'unsupported' }] }, { file: 'key' }, 'stable')).toThrow('尚未支持');
 });
 
+it('群发核对复用已加载定义和检查结果，更换文件后重新检查', async () => {
+  const user = userEvent.setup();
+  const api = client({
+    query: vi.fn(async action => {
+      if (action === 'GetSubAccountListForAgent') return { list: [{ subAccountId: 'g' }], total: 1 };
+      if (action === 'ListSignaturesForAgent') return { List: [{ Signature: '签名' }], Total: 1 };
+      return { List: [{ TemplateId: 't', ChannelType: 'CN_NTC', TemplateContent: '测试正文' }], Total: 1 };
+    }),
+    call: vi.fn(async (name, args) => {
+      if (name === 'get_batch_csv_template') return { value: 'phone\n', variables: [] };
+      if (name === 'complete_recipients_upload') return checkedRecipients(args);
+      throw new Error('unexpected write');
+    }),
+    upload: vi.fn(async file => uploadedRecipients(file.name, file.name)),
+  });
+  render(<BatchForm client={api} prefill={{ name: '测试任务', subAccount: 'g', signature: '签名', templateId: 't' }} />);
+  await screen.findByRole('button', { name: '下载名单模板' });
+  const upload = async name => {
+    fireEvent.change(screen.getByLabelText('群发 CSV 名单'), { target: { files: [new File(['phone\n13800000000\n'], name)] } });
+    await screen.findByText('名单已上传，核对群发任务时将检查文件内容。');
+  };
+  const prepare = async () => {
+    await user.click(screen.getByRole('button', { name: '核对群发任务' }));
+    await screen.findByRole('button', { name: '确认创建任务' });
+    await user.click(screen.getByRole('button', { name: '返回修改' }));
+  };
+  await upload('first.csv');
+  await prepare();
+  await prepare();
+  expect(api.call.mock.calls.filter(([name]) => name === 'complete_recipients_upload')).toHaveLength(1);
+  await upload('second.csv');
+  await prepare();
+  const checks = api.call.mock.calls.filter(([name]) => name === 'complete_recipients_upload');
+  expect(checks.map(([, args]) => args.request.context.file)).toEqual(['first.csv', 'second.csv']);
+  expect(checks.every(([, args]) => JSON.stringify(args.columns) === '["phone"]')).toBe(true);
+  expect(api.query.mock.calls.filter(([action]) => action === 'ListBatchTemplatesForAgent')).toHaveLength(1);
+  expect(api.call.mock.calls.filter(([name]) => name === 'get_batch_csv_template')).toHaveLength(1);
+});
+
 it('不完整的资源记录在渲染选择器之前失败，不改写未知业务字段', () => {
   expect(() => page({ List: [{ TemplateId: 't', ChannelType: 'CN_NTC', TaskFields: {} }], Total: 1 }, batchTemplateSchema)).toThrow('资源字段');
-  expect(() => page({ list: [{ id: 12, auditStatus: 3, usable: true }], total: 1 }, qualificationSchema)).toThrow('资源字段');
+  expect(signatureQualificationSchema.safeParse({ id: 12, purpose: 1 }).success).toBe(false);
   const record = { TemplateId: 't', ChannelType: 'CN_NTC', TaskFields: [], customBusinessField: 'keep' };
   expect(page({ List: [record], Total: 1 }, batchTemplateSchema).rows[0]).toBe(record);
 });
@@ -591,48 +719,34 @@ it('历史结果和不支持 Apps 的宿主都不重放业务调用', () => {
 });
 
 describe('标准 AppBridge 调用边界', () => {
-  it('把宿主带入的附件原样交给已有私密上传工具', async () => {
-    const draft = { name: 'proof.png', data: 'Zml4dHVyZQ==' };
-    const file = { name: draft.name, fileContent: 'fixture/uploaded', fileSuffix: 'png' };
-    const app = { callServerTool: vi.fn().mockResolvedValue({
-      structuredContent: { success: true, result: null },
-      _meta: { 'sms/form': { success: true, result: file } },
-    }) };
-    const api = new SmsFormClient(app);
-    const request = { kind: 'material', category: 'business' };
-    expect(await api.upload(draft, request)).toEqual(file);
-    expect(app.callServerTool.mock.calls[0][0]).toEqual({
-      name: 'upload_sms_file', arguments: { request: { ...request, ...draft } },
-    });
-  });
   it.each([undefined, null, 'false', 'true', 0, 1])('缺失或异常结果标记 %s 不能解除写入锁', async flag => {
     const app = { callServerTool: vi.fn().mockResolvedValue({ isError: true, structuredContent: {
       success: false, error: { code: 'fixture', message: '待核对', ...(flag === undefined ? {} : { outcome_unknown: flag }) },
     } }) };
-    await expect(new SmsFormClient(app).call('apply_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
+    await expect(new SmsFormClient(app).call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
     expect(app.callServerTool).toHaveBeenCalledTimes(1);
   });
   it('只有完整且明确的失败响应允许修改后重新提交', async () => {
     const app = { callServerTool: vi.fn().mockResolvedValue({ isError: true, structuredContent: {
       success: false, error: { code: 'invalid_arguments', message: '参数不完整', outcome_unknown: false },
     } }) };
-    await expect(new SmsFormClient(app).call('apply_signature', {}, { write: true })).rejects.toMatchObject({ unknown: false });
+    await expect(new SmsFormClient(app).call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: false });
     app.callServerTool.mockResolvedValue({ isError: true, structuredContent: {
       success: true, error: { code: 'fixture', message: '矛盾响应', outcome_unknown: false },
     } });
-    await expect(new SmsFormClient(app).call('apply_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
+    await expect(new SmsFormClient(app).call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
   });
   it('只从私密元数据读取 OCR，宿主上下文更新失败不改变调用结果', async () => {
     const app = { callServerTool: vi.fn().mockResolvedValue({ structuredContent: { success: true, result: null }, _meta: { 'sms/form': { success: true, result: { personName: 'private' } } } }), updateModelContext: vi.fn().mockRejectedValue(new Error('unsupported')) };
     const api = new SmsFormClient(app);
-    expect(await api.call('recognize_qualification_document', { private: true })).toEqual({ personName: 'private' });
+    expect(await api.call('recognize_qualification_document', {})).toEqual({ personName: 'private' });
     await api.report({ form: 'qualification', state: 'submitted', qualificationId: 123 });
     expect(JSON.stringify(app.updateModelContext.mock.calls)).not.toContain('private');
   });
   it('写操作连接中断保留未知结果且不重试', async () => {
     const app = { callServerTool: vi.fn().mockRejectedValue(new Error('raw transport private data')) };
     const api = new SmsFormClient(app);
-    await expect(api.call('apply_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
+    await expect(api.call('submit_signature', {}, { write: true })).rejects.toMatchObject({ unknown: true });
     expect(app.callServerTool).toHaveBeenCalledTimes(1);
   });
 });

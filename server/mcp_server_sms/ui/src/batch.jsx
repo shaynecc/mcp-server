@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Radio } from '@arco-design/web-react';
 import { BatchTestSms } from './batch-test-sms.jsx';
 import { Choice, Confirm, Feedback, Field, Files, LockedFields, More, Receipt, Summary, useOperation } from './common.jsx';
-import { OperationError, fileInput, page, required, withPrefilledOptions } from './client.js';
+import { OperationError, page, required, withPrefilledOptions } from './client.js';
 import { batchTemplateSchema, messageGroupSchema, signatureSchema } from './contracts.js';
 
 // 0–5 的任务可以请求取消，是否超过取消截止时间由短信服务最终校验。
@@ -30,7 +30,7 @@ export function batchPayload(values, template, file, key) {
   };
 }
 
-export function BatchForm({ client, prefill }) {
+export function BatchForm({ client, prefill, initialTask }) {
   const [values, setValues] = useState(() => ({
     name: prefill?.name,
     content: prefill?.content,
@@ -52,8 +52,9 @@ export function BatchForm({ client, prefill }) {
   const [previewTemplate, setPreviewTemplate] = useState(null);
   const [checkTraffic, setCheckTraffic] = useState(prefill?.checkTraffic ?? false);
   const [trafficReport, setTrafficReport] = useState(null);
+  const recipientReview = useRef(null);
   const [trial, setTrial] = useState(null);
-  const [task, setTask] = useState(null);
+  const [task, setTask] = useState(initialTask ?? null);
   const [taskAction, setTaskAction] = useState(null);
   const [detail, setDetail] = useState(null);
   const operation = useOperation();
@@ -85,6 +86,9 @@ export function BatchForm({ client, prefill }) {
       sub_account: group, template_id: templateId, include_variables: true,
     });
     if (typeof result?.value !== 'string' || !result.value) throw new OperationError('模板未返回 CSV 示例。');
+    if (!Array.isArray(result.variables) || result.variables.some(name => typeof name !== 'string' || !name)) {
+      throw new OperationError('模板未返回完整的 CSV 列定义。');
+    }
     setDemo(result);
   };
   const clearTemplateInput = fields => {
@@ -162,27 +166,65 @@ export function BatchForm({ client, prefill }) {
     await selectGroup(subAccount);
   };
   // 初始结果只用于打开时的预选；宿主更新界面样式不会覆盖用户的后续选择。
-  useEffect(() => { operation.run(loadInitialOptions); }, [client]);
+  useEffect(() => { operation.run(async () => {
+    if (initialTask) {
+      await loadTask(initialTask);
+    } else await loadInitialOptions();
+  }); }, [client]);
   const readTask = async expected => {
-    const result = await client.call('get_batch_task', { sub_account: expected.subAccount, task_id: expected.taskId });
+    const result = await client.call('query_batch_tasks', { request: { action: 'GetBatchTaskDetail', params: { subAccount: expected.subAccount, taskId: expected.taskId } } });
     if (result?.taskId !== expected.taskId || result?.subAccount !== expected.subAccount || !Number.isInteger(result?.status)) {
       throw new OperationError('返回的任务身份或状态不完整，请先查询核对。');
     }
     return result;
   };
+  const loadTask = async reference => {
+    const current = await readTask(reference);
+    // 身份核对通过后同时更新摘要和详情，首次查询失败后的刷新也能恢复完整操作上下文。
+    setTask(previous => ({ ...previous, ...reference,
+      name: current.name ?? current.taskName ?? previous?.name,
+      signature: current.signature ?? previous?.signature,
+      templateId: current.templateId ?? previous?.templateId,
+      totalCount: current.totalCount ?? previous?.totalCount,
+      dupCount: current.dupCount ?? previous?.dupCount,
+    }));
+    setDetail(current);
+  };
   const prepare = () => operation.run(async () => {
-    const currentTemplate = await readTemplate(required(values.subAccount, '请选择消息组。'), required(values.signature, '请选择签名。'), required(values.templateId, '请选择群发模板。'));
+    const currentTemplate = required(selected, '请选择群发模板。');
     const body = batchPayload(values, currentTemplate, file, crypto.randomUUID());
     if ((currentTemplate.TaskFields ?? []).length) {
       const checked = await client.query('ValidateBatchTaskContentForAgent', { subAccount: body.subAccount, signature: body.signature, templateId: body.templateId, ...(body.content !== undefined ? { content: body.content } : {}) });
       if (checked?.Approved !== true) throw new OperationError(checked?.Reason || '任务正文未通过预检。');
     }
-    const report = checkTraffic ? await client.call('check_batch_traffic_resources', { request: {
+    const traffic = checkTraffic ? {
       sub_account: body.subAccount, signature: body.signature, template_id: body.templateId,
-      content: body.content, template_content: currentTemplate.TemplateContent ?? currentTemplate.Content,
-      file: await fileInput(file.source),
-    } }) : null;
-    setTrafficReport(report);
+      content: body.content ?? currentTemplate.TemplateContent ?? currentTemplate.Content,
+    } : undefined;
+    const request = required(file.receipt, '名单上传信息不完整，请重新选择文件。');
+    const columns = ['phone', ...required(csvExample, '请先读取当前模板的 CSV 示例。').variables];
+    const reviewKey = JSON.stringify({ request, traffic, template: currentTemplate, columns });
+    // 仅复用本页同一文件和模板的展示结果；创建任务仍由短信后端重新校验文件。
+    let checked = recipientReview.current?.key === reviewKey
+      && request.context?.expires_at * 1000 > Date.now() ? recipientReview.current.result : null;
+    if (!checked) {
+      checked = await client.call('complete_recipients_upload', { request, columns, ...(traffic ? { traffic } : {}) });
+      if (checked?.file !== file.file || checked?.receipt?.signature !== request.signature
+        || !Number.isInteger(checked.totalCount) || checked.totalCount <= 0
+        || !Number.isInteger(checked.dupCount) || checked.dupCount < 0
+        || checked.dupCount >= checked.totalCount) {
+        throw new OperationError('名单核对结果不完整，请重新核对。');
+      }
+      const report = checked.trafficReport;
+      if (checkTraffic && (!report || report.totalRows !== checked.totalCount)) {
+        throw new OperationError('名单引流检查结果不完整，请重新核对。');
+      }
+      recipientReview.current = !report || (report.checkedRows === report.totalRows
+        && report.failedRows === 0 && report.uncheckedRows === 0 && report.missingResourceRows === 0)
+        ? { key: reviewKey, result: checked } : null;
+    }
+    setFile(previous => ({ ...previous, ...checked }));
+    setTrafficReport(checked.trafficReport ?? null);
     setPreviewTemplate(currentTemplate);
     setSnapshot(body);
   });
@@ -194,12 +236,13 @@ export function BatchForm({ client, prefill }) {
     await client.report({ form: 'batch', state: 'created', taskId: result.taskId, totalCount: result.totalCount, dupCount: result.dupCount });
     setDetail(await readTask(created));
   }, { mutation: true });
-  const refresh = () => operation.run(async () => setDetail(await readTask(task)));
+  const refresh = () => operation.run(() => loadTask(task));
   const prepareTaskAction = action => operation.run(async () => {
     const current = await readTask(task);
     if (action === 'cancel' && !cancellableStatuses.has(current.status)) throw new OperationError('当前任务状态不支持取消，请核对最新状态。');
     let confirmationContent = current.sendContent;
     if (action === 'start') {
+      required(current.signature ?? task.signature, '任务签名未完整返回，请查询核对后操作。');
       if (current.status !== 2) throw new OperationError('任务尚未通过校验或已启动、结束，请核对最新状态。');
       if (current.templateId !== task.templateId) throw new OperationError('任务模板与本次创建请求不一致，请核对。');
       if (typeof current.sendContent !== 'string' || !current.sendContent) {
@@ -221,10 +264,10 @@ export function BatchForm({ client, prefill }) {
 
   return <LockedFields locked={operation.busy || operation.uncertain}><main className="batch-page">
     <header className="batch-header"><div className="batch-header-inner"><div className="batch-brand">火山引擎 · 短信服务</div>
-      <div className="batch-title-row"><div><h1>创建短信群发任务</h1><p>选择模板、上传名单并核对。创建任务后，仍需单独确认启动。</p></div></div>
+      <div className="batch-title-row"><div><h1>{initialTask ? '管理短信群发任务' : '创建短信群发任务'}</h1><p>{initialTask ? '按任务编号核对当前状态，确认后再启动或取消。' : '选择模板、上传名单并核对。创建任务后，仍需单独确认启动。'}</p></div></div>
     </div></header>
     <div className="batch-body"><Feedback operation={operation} /><div className="batch-sheet">
-      {task ? <section className="batch-section"><Receipt title="群发任务已创建" id={task.taskId}><p>任务创建成功不等于已经发送。</p></Receipt>
+      {task ? <section className="batch-section"><Receipt title={initialTask ? '群发任务详情' : '群发任务已创建'} id={task.taskId}><p>任务创建成功不等于已经发送。</p></Receipt>
         {task.submittedAction && <p>{task.submittedAction === 'start' ? '启动' : '取消'}请求已受理，请刷新核对最新状态。</p>}
         <Summary items={[['任务', task.name], ['名单数量', task.totalCount], ['重复号码', task.dupCount], ...(detail ? [['当前状态', detail.status === 2 ? '待确认发送' : [3, 4, 5, 6].includes(detail.status) ? '任务已启动，送达结果请查询回执' : '正在处理或已经结束，请核对平台任务记录']] : [])]} />
         {taskAction ? <Confirm key={taskAction} title={taskAction === 'start' ? '确认启动本次群发' : '确认取消本次任务'}
@@ -284,7 +327,9 @@ export function BatchForm({ client, prefill }) {
               const uploaded = await client.upload(source, { kind: 'recipients', sub_account: values.subAccount, template_id: values.templateId });
               setFile({ ...uploaded, source });
             }, { mutation: true })} onRemove={() => setFile(null)} />
-          {file?.file && <p>已校验 {file.totalCount} 条记录，其中重复号码 {file.dupCount} 条。实际任务数量以创建结果为准。</p>}
+          {file?.file && <p>{Number.isInteger(file.totalCount)
+            ? `已校验 ${file.totalCount} 条记录，其中重复号码 ${file.dupCount} 条。实际任务数量以创建结果为准。`
+            : '名单已上传，核对群发任务时将检查文件内容。'}</p>}
           <Checkbox checked={checkTraffic} disabled={operation.busy || operation.uncertain}
             onChange={setCheckTraffic}>用实际短信正文检查名单中的引流资源</Checkbox>
           {checkTraffic && <p>检查时仅向短信服务提交渲染后的短信正文，结果会显示实际覆盖的行数。</p>}

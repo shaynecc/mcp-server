@@ -42,7 +42,10 @@ export function BatchTestSms({ client, operation, subAccount, signature, templat
     });
   };
   const send = () => operation.run(async () => {
-    const result = await client.call('send_batch_test_sms', { request: snapshot }, { write: true });
+    const result = await client.call('send_batch_test_sms', { request: {
+      sub_account: snapshot.sub_account, signature: snapshot.signature, template_id: snapshot.template_id,
+      mobile: snapshot.mobile, template_params: snapshot.template_params,
+    } }, { write: true });
     if (typeof result?.messageId !== 'string' || !result.messageId || !Number.isInteger(result.requestedAt)) {
       throw new OperationError('未收到可核对的试发回执，请查询发送记录。', { unknown: true });
     }

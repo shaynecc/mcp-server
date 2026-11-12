@@ -24,6 +24,11 @@ export default defineConfig({
       const sources = Object.fromEntries([...inputs].sort().map(file => [
         path.relative(packageRoot, file), createHash('sha256').update(readFileSync(file)).digest('hex'),
       ]));
+      // 生成许可证文档时统一 Markdown 行尾，不改写许可正文，避免依赖包 CRLF/尾空格进入产物。
+      const license = bundle['THIRD_PARTY_LICENSES.md'];
+      if (license?.type === 'asset' && typeof license.source === 'string') {
+        license.source = license.source.replace(/\r\n/g, '\n').replace(/[ \t]+$/gm, '');
+      }
       const html = bundle['forms.html'];
       if (!html || html.type !== 'asset') throw new Error('Missing self-contained forms.html');
       this.emitFile({ type: 'asset', fileName: 'build-manifest.json', source: JSON.stringify({

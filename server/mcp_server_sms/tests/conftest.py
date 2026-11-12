@@ -25,6 +25,11 @@ def api_calls():
         calls.append(request)
         action = request.url.params["Action"]
         results = {
+            "ListSmsTemplateForAgent": {"List": [{"TemplateId": "SPT_fixture", "TemplateContent": "内容${text}", "ChannelType": "CN_NTC"}], "Total": 1},
+            "GetSignatureIdentificationList": {"list": [{"id": 12, "purpose": 1, "auditStatus": 3, "usable": True, "businessCertificateName": "示例企业"}], "total": 1},
+            "GetApplySignatureBind": [{"id": 12, "purpose": 1, "materialName": "示例资质", "businessCertificateName": "示例企业"}],
+            "BulkCreateTobTrafficDrivingPhoneForAgent": "",
+            "BulkCreateTobTrafficDrivingLinkForAgent": "",
             "SendSmsForAgent": {"MessageIds": ["fixture-message"]},
             "ApplySmsSignatureV2": {"applyId": "fixture-signature", "status": 1},
             "ApplySmsTemplateV2ForAgent": {"templateId": "fixture-template", "status": 1},

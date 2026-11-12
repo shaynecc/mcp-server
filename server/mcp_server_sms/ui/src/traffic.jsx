@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Checkbox, Radio } from '@arco-design/web-react';
 import { Choice, Confirm, Feedback, Field, Receipt, Summary, maskedIdentifier, useOperation } from './common.jsx';
-import { required } from './client.js';
+import { OperationError, required } from './client.js';
 
 const numberTypes = [[1, '手机号码'], [2, '400 号码'], [3, '700 号码'], [4, '800 号码'], [5, '95 / 96 号码'], [6, '12 号码'], [7, '固定电话']];
 const labels = {
@@ -61,22 +61,18 @@ export function TrafficForm({ client, prefill }) {
   });
   const submit = () => operation.run(async () => {
     const count = preview.params.data.length;
-    const result = await client.call('register_traffic_resource', { request: preview, read_back: true }, { write: true });
-    const resourceIds = Array.isArray(result?.resourceIds)
-      ? result.resourceIds.filter(id => Number.isSafeInteger(id) && id > 0) : [];
-    const verified = result?.verified === true && resourceIds.length === count;
-    setReceipt({ resourceIds, verified, count }); setRows([]); setPreview(null);
-    await client.report({ form: 'traffic', state: verified ? 'verified' : 'accepted', kind, count, resourceIds });
+    const result = await client.call('submit_traffic_resources', { request: preview }, { write: true });
+    if (result !== '') throw new OperationError('未收到明确的引流录入结果，请查询核对。', { unknown: true });
+    setReceipt({ count }); setRows([]); setPreview(null);
+    await client.report({ form: 'traffic', state: 'accepted', kind, count });
   }, { mutation: true });
 
   return <main className="traffic-page">
     <span className="traffic-eyebrow">火山引擎 · 短信服务</span>
     <h1>录入短信引流信息</h1><p>填写真实的链接备案或号码归属信息，核对后再提交。</p>
     <Feedback operation={operation} />
-    {receipt ? <Receipt title={receipt.verified ? '引流资源已录入并核对' : '录入已受理，部分资源待核对'}>
-      <p>已查到 {receipt.resourceIds.length} / {receipt.count} 条资源。</p>
-      {receipt.resourceIds.length > 0 && <p>资源 ID {receipt.resourceIds.join('、')}</p>}
-      {!receipt.verified && <p>请通过引流资源查询继续核对，避免重复录入。</p>}
+    {receipt ? <Receipt title="引流录入已受理">
+      <p>本次提交 {receipt.count} 条资料。</p>
     </Receipt>
       : preview ? <div className="traffic-card"><Confirm title="确认本次引流信息" busy={operation.busy} disabled={operation.uncertain}
         onBack={() => setPreview(null)} onSubmit={submit}>

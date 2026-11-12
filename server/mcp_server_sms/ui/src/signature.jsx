@@ -2,19 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Radio } from '@arco-design/web-react';
 import { Choice, Confirm, Feedback, Field, Files, LockedFields, More, Receipt, Summary, useOperation } from './common.jsx';
 import { OperationError, materialPreview, page, required, withPrefilledOptions } from './client.js';
-import { messageGroupSchema, qualificationSchema, signatureSchema } from './contracts.js';
+import { messageGroupSchema, signatureQualificationSchema, signatureSchema } from './contracts.js';
 
 const channels = ['CN_OTP', 'CN_NTC', 'CN_MKT'];
 const sources = [[1, '公司全称／简称'], [2, 'APP 全称'], [3, '商标全称']];
-const usableQualification = row => row.usable === true && row.auditStatus === 3;
-const qualificationName = row => row?.businessInfo?.businessCertificateName || row?.businessCertificateName;
 
 export function signaturePreview(values, qualification, scope, attachments) {
   required(values.content, '请输入签名内容。');
   const contentLength = Array.from(values.content).length;
   if (contentLength < 2 || contentLength > 25) throw new OperationError('签名内容须为 2 至 25 个字符。');
-  if (!qualification || !usableQualification(qualification)) throw new OperationError('请选择审核通过且可用的资质。');
-  const businessName = required(qualificationName(qualification), '关联资质缺少营业证件名称，请重新查询。');
+  if (!signatureQualificationSchema.safeParse(qualification).success) throw new OperationError('请选择审核通过的资质。');
+  const businessName = required(qualification.businessCertificateName, '关联资质缺少营业证件名称，请重新查询。');
   required(scope, '请选择消息组范围。');
   if (scope === 'limited' && !values.subAccounts?.length) throw new OperationError('请选择绑定的消息组。');
   if (values.source === 2 && !values.appIcpFilling && !attachments.app.length) throw new OperationError('请填写 APP ICP 备案号或上传备案截图。');
@@ -54,9 +52,8 @@ export function SignatureForm({ client, prefill }) {
     ? 'all'
     : prefill?.isLimitSubAccount === 1 || prefill?.subAccounts?.length
       ? 'limited' : prefill?.subAccounts ? 'all' : null);
-  const [qualifications, setQualifications] = useState({ rows: [], total: 0, page: 0 });
+  const [qualifications, setQualifications] = useState([]);
   const [groups, setGroups] = useState({ rows: [], total: 0, page: 0 });
-  const [prefilledQualifications, setPrefilledQualifications] = useState([]);
   const [prefilledGroups, setPrefilledGroups] = useState([]);
   const [attachments, setAttachments] = useState(() => ({
     app: prefill?.appIcp?.appIcpFileList ?? [],
@@ -69,16 +66,9 @@ export function SignatureForm({ client, prefill }) {
   const [status, setStatus] = useState(null);
   const operation = useOperation();
   const update = (key, value) => setValues(current => ({ ...current, [key]: value }));
-  const qualificationRows = withPrefilledOptions(qualifications.rows, prefilledQualifications, 'id');
   const groupRows = withPrefilledOptions(groups.rows, prefilledGroups, 'subAccountId');
-  const selected = qualificationRows.find(row => row.id === values.signatureIdentificationID);
-  const content = values.content ?? (values.source === 1 ? qualificationName(selected) : undefined);
-  const loadQualifications = async () => {
-    const next = qualifications.page + 1;
-    const result = page(await client.call('list_qualifications', { status: [3], page: next, page_size: 100 }), qualificationSchema);
-    setQualifications(current => ({ ...result, rows: [...current.rows, ...result.rows], page: next }));
-    return result;
-  };
+  const selected = qualifications.find(row => row.id === values.signatureIdentificationID);
+  const content = values.content ?? (values.source === 1 ? selected?.businessCertificateName : undefined);
   const loadGroups = async () => {
     const next = groups.page + 1;
     const result = page(await client.query('GetSubAccountListForAgent', { pageIndex: next, pageSize: 100 }), messageGroupSchema);
@@ -86,19 +76,19 @@ export function SignatureForm({ client, prefill }) {
     return result;
   };
   const loadInitialQualifications = async () => {
-    const { rows, total } = await loadQualifications();
+    const result = signatureQualificationSchema.array().nullable().safeParse(
+      await client.query('GetApplySignatureBind', {}),
+    );
+    if (!result.success) throw new OperationError('资质候选返回不完整，请重新查询。');
+    // 接口只返回审核通过的候选；没有资质时 Result 为 null，不需要分页或逐条补查。
+    const rows = result.data ?? [];
+    setQualifications(rows);
     const id = prefill?.signatureIdentificationID;
     if (id === undefined) {
-      const usable = rows.filter(usableQualification);
-      if (total === rows.length && usable.length === 1) update('signatureIdentificationID', usable[0].id);
+      if (rows.length === 1) update('signatureIdentificationID', rows[0].id);
       return;
     }
-    const matches = row => row.id === id && usableQualification(row);
-    const choice = rows.find(matches) ?? page(await client.call('list_qualifications', {
-      qualification_id: id, status: [3], page: 1, page_size: 100,
-    }), qualificationSchema).rows.find(matches);
-    if (!choice) throw new OperationError('预填资质当前不可用，请重新选择。');
-    setPrefilledQualifications([choice]);
+    if (!rows.some(row => row.id === id)) throw new OperationError('预填资质当前不可用，请重新选择。');
     update('signatureIdentificationID', id);
   };
   const loadInitialGroups = async () => {
@@ -143,10 +133,7 @@ export function SignatureForm({ client, prefill }) {
     disabled={operation.busy || operation.uncertain} onSelect={(files, draftIndex) => upload(category, files, draftIndex)}
     onRemove={index => setAttachments(current => ({ ...current, [category]: current[category].filter((_, i) => i !== index) }))} />;
   const submit = () => operation.run(async () => {
-    const result = await client.call('apply_signature', {
-      request: snapshot,
-      confirmation: { businessCertificateName: preview.businessName, acceptNameRisk: preview.nameRisk },
-    }, { write: true });
+    const result = await client.call('submit_signature', { request: snapshot }, { write: true });
     setReceipt({ ...result, signature: snapshot.content }); setPreview(null); setAttachments({ app: [], trademark: [], other: [] });
     await client.report({ form: 'signature', state: 'response_received', applyId: result.applyId, status: result.status });
   }, { mutation: true });
@@ -178,8 +165,7 @@ export function SignatureForm({ client, prefill }) {
         <Field label="签名内容" value={content} onChange={value => update('content', value)} required maxLength={25} />
         <Choice label="签名来源" value={values.source} onChange={value => update('source', value)} options={sources} />
         <div className="span-2"><Choice label="关联资质" value={values.signatureIdentificationID} onChange={value => update('signatureIdentificationID', value)}
-          options={qualificationRows.filter(usableQualification).map(row => [row.id, `${row.materialName ?? row.businessInfo?.businessCertificateName ?? row.id} · ${row.purpose === 1 ? '自用' : '他用'}`])} />
-          <More loaded={qualifications.rows.length} total={qualifications.total} disabled={operation.busy} onClick={() => operation.run(loadQualifications)} /></div>
+          options={qualifications.map(row => [row.id, `${row.materialName} · ${row.purpose === 1 ? '自用' : '他用'}`])} /></div>
         <div className="span-2"><Field label="消息组范围"><Radio.Group value={scope} onChange={setScope} options={[{ value: 'all', label: '全部消息组' }, { value: 'limited', label: '指定消息组' }]} /></Field></div>
         {scope === 'limited' && <div className="span-2"><Choice label="绑定消息组" mode="multiple" value={values.subAccounts} onChange={value => update('subAccounts', value)}
           options={groupRows.map(row => [row.subAccountId, row.subAccountName || row.subAccountId])} />

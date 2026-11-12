@@ -9,6 +9,31 @@ from mcp_server_sms.client import SmsClient
 CREDENTIALS = Credentials("fixture-access-key", "fixture-secret-key", "fixture-session-token")
 
 
+@pytest.mark.parametrize("action", ["GetBatchTaskDetail", "GetBatchTaskList"])
+async def test_batch_queries_return_summary_without_storage_capabilities(action):
+    task = {
+        "taskId": "fixture-task", "subAccount": "fixture-group", "status": 2,
+        "sendContent": "原文不变", "totalCount": 10, "receiptSuccessCount": 8,
+        "fileUrl": "private/recipients.csv",
+        "fileViewUrl": "https://fixture.invalid/recipients.csv?X-Tos-Signature=secret-capability",
+        "extra": {"privateExport": "another-private-capability"},
+    }
+    result = task if action == "GetBatchTaskDetail" else {"list": [task], "total": 1}
+    async with SmsClient(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json={"Result": result})
+    )) as client:
+        response = await client.call(action, {}, CREDENTIALS)
+    assert response["success"]
+    public = response["result"] if action == "GetBatchTaskDetail" else response["result"]["list"][0]
+    assert public == {key: task[key] for key in (
+        "taskId", "subAccount", "status", "sendContent", "totalCount", "receiptSuccessCount"
+    )}
+    assert "private" not in json.dumps(response)
+    assert "secret-capability" not in json.dumps(response)
+    if action == "GetBatchTaskList":
+        assert response["result"]["total"] == 1
+
+
 @pytest.mark.parametrize(
     "action,exception,unknown",
     [
@@ -16,7 +41,7 @@ CREDENTIALS = Credentials("fixture-access-key", "fixture-secret-key", "fixture-s
         ("SendSmsForAgent", httpx.WriteTimeout, True),
         ("SendSmsForAgent", httpx.RemoteProtocolError, True),
         ("SendSmsForAgent", httpx.ConnectError, False),
-        ("ListSubAccountForAgent", httpx.ReadTimeout, False),
+        ("GetSubAccountListForAgent", httpx.ReadTimeout, False),
     ],
 )
 async def test_transport_failures_never_retry(action, exception, unknown):
@@ -70,7 +95,7 @@ async def test_official_signer_carries_sts_without_logging(capsys, caplog):
 
     async with SmsClient(transport=httpx.MockTransport(handler)) as client:
         result = await client.call(
-            "ListSubAccountForAgent", {"SubAccountName": "示例"}, CREDENTIALS
+            "GetSubAccountListForAgent", {"SubAccountName": "示例"}, CREDENTIALS
         )
     assert result["success"]
     request = calls[0]

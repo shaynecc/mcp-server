@@ -1,6 +1,10 @@
 {
   "maxUploadBytes": 10485760,
   "maxConcurrentUploads": 2,
+  "recipientsUpload": {
+    "confirmationTtlSeconds": 3600,
+    "connectDomains": ["https://*.volces.com"]
+  },
   "smsOnboarding": {
     "consoleUrl": "https://console.volcengine.com/sms",
     "pricingUrl": "https://www.volcengine.com/docs/6361/67320",
@@ -23,6 +27,18 @@
     "serviceId": "2rcdq6eupd",
     "region": "cn-north-1",
     "appId": "5997",
-    "userId": "sms"
+    "userId": "sms",
+    "confirmationTtlSeconds": 600,
+    "uploadHosts": [
+      "2rcdq6eupd.up.imagex-cn-north-1.volces.com",
+      "2rcdq6eupd.up.imagex-accelerate.volces.com",
+      "tos-lf-x.snssdk.com",
+      "tos-hl-x.snssdk.com",
+      "tos-nc2-slb2.bytecdn.cn",
+      "tos-nc2-slb1.bytecdn.cn",
+      "tos-lf-x-tob.bytecdn.cn",
+      "tos-lq-x-tob.bytecdn.cn",
+      "tos-hl-x-tob.bytecdn.cn"
+    ]
   }
 }

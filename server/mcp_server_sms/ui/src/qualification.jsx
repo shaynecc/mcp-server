@@ -164,7 +164,7 @@ export function QualificationForm({ client, prefill }) {
   };
   const businessOcr = () => operation.run(async () => {
     const certificate = required(files.business?.fileContent, '请先上传营业证件。');
-    const result = await client.call('recognize_qualification_document', { business_certificate_type: values.business.businessCertificateType, certificate, private: true });
+    const result = await client.call('recognize_qualification_document', { business_certificate_type: values.business.businessCertificateType, certificate });
     const extracted = Object.fromEntries(businessFields.filter(([key]) => typeof result?.[key] === 'string').map(([key]) => [key, result[key]]));
     setValues(current => ({ ...current, business: { ...current.business, ...extracted } }));
     setTickets(current => ({ ...current, business: undefined }));
@@ -173,7 +173,7 @@ export function QualificationForm({ client, prefill }) {
     const material = files[role];
     const front = required(material?.front?.fileContent, '请上传身份证人像面。');
     const back = required(material?.back?.fileContent, '请上传身份证国徽面。');
-    const result = await client.call('recognize_qualification_document', { id_card_front_image: front, id_card_back_image: back, private: true });
+    const result = await client.call('recognize_qualification_document', { id_card_front_image: front, id_card_back_image: back });
     const extracted = Object.fromEntries(['personName', 'personIDCard'].filter(key => typeof result?.[key] === 'string').map(key => [key, result[key]]));
     setValues(current => ({ ...current, [role]: { ...current[role], ...extracted } }));
     setTickets(current => ({ ...current, [role]: undefined }));
@@ -187,13 +187,13 @@ export function QualificationForm({ client, prefill }) {
         business_certificate_name: required(business.businessCertificateName, '请输入企业名称。'),
         unified_social_credit_identifier: required(business.unifiedSocialCreditIdentifier, '请输入社会信用代码。'),
         legal_person_name: required(business.legalPersonName, '请输入法人姓名。'),
-        private: true, offer_manual_review: true,
+
       });
     } else {
       const needsPhone = role !== 'legal' && (rank?.[role + 'ThreeElement'] || role === 'operator' && values.sameOperator && rank?.responsibleThreeElement);
       result = await client.call('check_qualification_person', {
         person_name: required(person.personName, '请输入姓名。'), person_id_card: required(person.personIDCard, '请输入证件号码。'),
-        ...(needsPhone ? { person_mobile: required(person.personMobile, '当前校验需要手机号。') } : {}), private: true,
+        ...(needsPhone ? { person_mobile: required(person.personMobile, '当前校验需要手机号。') } : {}),
       });
     }
     const checkResult = role === 'business' && result?.manualReview === true ? result : checkedTicket(result);
@@ -215,7 +215,7 @@ export function QualificationForm({ client, prefill }) {
   }, { mutation: true });
   const prepare = () => operation.run(() => { setPreview(qualificationPreview(values, files, tickets, verified, rank, account)); setStep(3); });
   const submit = () => operation.run(async () => {
-    const id = await client.call('apply_qualification', {
+    const id = await client.call('submit_qualification', {
       request: snapshot, ...(preview.manualReview ? { confirm_manual_review: true } : {}),
     }, { write: true });
     setReceipt(id); setPreview(null); setValues(initialValues()); setTickets({}); setCodes({}); setVerified({}); setFiles({ other: [] });

@@ -41,6 +41,7 @@ class Action:
     uncertain_error_codes: frozenset[str] = frozenset()
     timeout: float | None = None
     expose_result: bool = True
+    public_result_fields: frozenset[str] | None = None
 
 
 _RESOURCE_PRIVATE_FIELDS = frozenset({
@@ -51,22 +52,31 @@ _RESOURCE_PRIVATE_FIELDS = frozenset({
 })
 _UNCERTAIN_WRITE_ERRORS = frozenset({"1999", "SY:0500"})
 
+# 群发查询只公开任务摘要。文件 Key、下载能力和内部扩展字段留在短信服务。
+_BATCH_TASK_FIELDS = frozenset({
+    "taskId", "subAccount", "taskName", "signature", "templateId", "templateName",
+    "channelType", "scheduled", "sendTime", "status", "totalCount", "dupCount",
+    "sendContent", "msgCount", "okCount", "failCount", "receiptSuccessCount",
+    "receiptFailCount", "noReceiptCount", "createdAt", "updatedAt", "taskType",
+    "sendTimeStamp", "createdAtStamp", "updatedAtStamp",
+})
+_PAGE_FIELDS = frozenset({"List", "list", "Items", "items", "Total", "total", "Page", "page", "PageSize", "pageSize"})
+
 
 # Only named tools can select an action; callers cannot supply arbitrary APIs.
 ACTIONS = {
-    "ListSubAccountForAgent": Action("POST", private_result_fields=_RESOURCE_PRIVATE_FIELDS),
     "GetSubAccountListForAgent": Action("POST", private_result_fields=_RESOURCE_PRIVATE_FIELDS),
     "GetSubAccountDetail": Action("GET", private_result_fields=_RESOURCE_PRIVATE_FIELDS),
     "ListAllSmsProduct": Action("GET"),
     "GetAccountIdentRankForAgent": Action("GET"),
     "GetSignatureIdentificationList": Action("POST", private_result_fields=_RESOURCE_PRIVATE_FIELDS),
+    "GetApplySignatureBind": Action("GET"),
     "GetOCRLicenseForAgent": Action("POST"),
     "ThreeElementEnterpriseCheckForAgent": Action("POST"),
     "ThreeElementPersonCheckForAgent": Action("POST"),
     "SendSmsVerifyCodeByMobile": Action("POST", True, required_any=("messageId",)),
     "CheckSmsVerifyCodeByMobile": Action("POST", True, required_any=("status",)),
     "ApplySignatureIdentificationForAgent": Action("POST", True, "id"),
-    "ListSignatureForAgent": Action("POST", private_result_fields=_RESOURCE_PRIVATE_FIELDS),
     "ListSignaturesForAgent": Action("POST", private_result_fields=_RESOURCE_PRIVATE_FIELDS),
     "ApplySmsSignatureV2": Action(
         "POST", True, required_any=("applyId", "status"),
@@ -79,11 +89,17 @@ ACTIONS = {
         "POST", True, required_any=("templateId", "status"),
         uncertain_error_codes=_UNCERTAIN_WRITE_ERRORS,
     ),
-    "SendSmsForAgent": Action("POST", True, required_any=("MessageId", "MessageIds")),
+    "SendSmsForAgent": Action(
+        "POST", True, required_any=("MessageId", "MessageIds"),
+        uncertain_error_codes=_UNCERTAIN_WRITE_ERRORS,
+    ),
     "ListSmsSendLogForAgent": Action("POST", private_result_fields=frozenset({"mobile", "content"})),
     "GetTotalSendCountStatV4ForAgent": Action("POST"),
     "GetUploadTosURL": Action(
         "GET", True, required_all=("file", "url"), opaque_result_fields=("url",)
+    ),
+    "GetFilePublicTosURL": Action(
+        "GET", required_all=("fileName", "url"), opaque_result_fields=("url",)
     ),
     # 仅上传组件消费原始凭据；没有任何公开业务工具允许选择这个 Action。
     "GetMUploadParam": Action("GET", result_model=MaterialAuthorization, expose_result=False),
@@ -94,8 +110,8 @@ ACTIONS = {
         "POST", True, result_model=BatchTaskCreated, timeout=60,
         uncertain_error_codes=_UNCERTAIN_WRITE_ERRORS,
     ),
-    "GetBatchTaskDetail": Action("GET"),
-    "GetBatchTaskList": Action("GET"),
+    "GetBatchTaskDetail": Action("GET", public_result_fields=_BATCH_TASK_FIELDS),
+    "GetBatchTaskList": Action("GET", public_result_fields=_BATCH_TASK_FIELDS | _PAGE_FIELDS),
     "ConsentBatchTask": Action("POST", True),
     "DeleteBatchTask": Action("POST", True),
     "ValidateBatchTaskContentForAgent": Action("POST", result_model=BatchContentChecked),
@@ -153,18 +169,20 @@ class _RejectCookies(DefaultCookiePolicy):
 def safe_result(
     value: Any, credentials: Credentials, *, opaque_fields: tuple[str, ...] = (),
     private_fields: frozenset[str] = frozenset(),
+    public_fields: frozenset[str] | None = None,
 ) -> Any:
     """Redact credentials while preserving declared top-level API references."""
     if isinstance(value, dict):
         return {
             key: item if key in opaque_fields else safe_result(
-                item, credentials, private_fields=private_fields
+                item, credentials, private_fields=private_fields, public_fields=public_fields
             )
             for key, item in value.items()
             if key.lower() not in _CREDENTIAL_FIELDS | private_fields
+            and (public_fields is None or key in public_fields)
         }
     if isinstance(value, list):
-        return [safe_result(item, credentials, private_fields=private_fields) for item in value]
+        return [safe_result(item, credentials, private_fields=private_fields, public_fields=public_fields) for item in value]
     if isinstance(value, str):
         for secret in (credentials.access_key, credentials.secret_key, credentials.session_token):
             if secret:
@@ -405,6 +423,7 @@ class SmsClient:
             "result": safe_result(
                 result, credentials, opaque_fields=spec.opaque_result_fields,
                 private_fields=spec.private_result_fields,
+                public_fields=spec.public_result_fields,
             ) if spec.expose_result else None,
             "error": None,
         }

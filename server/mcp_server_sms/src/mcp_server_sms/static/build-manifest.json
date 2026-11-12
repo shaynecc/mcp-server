@@ -1,26 +1,30 @@
 {
   "sources": {
-    "src/mcp_server_sms/form_config.json": "984ffdcaef50cfa067b96e4ea9a0bc2558c1e6a3f7274ea30de2f9dc81badfc7",
+    "src/mcp_server_sms/form_config.json": "18410ef4e1711faa53b3718728f4ee347c93de069375a1e2234362a98e0e31be",
     "ui/forms.html": "8786fcb7dc135c8ec7239384fd5b2f3a270f40cb2e14d318aeb4797bf3bfa83c",
-    "ui/package-lock.json": "651de4154352a8aa8b1afc3789739446bb8a0bb1650895f99dc934417b362070",
-    "ui/package.json": "c79f01cf2c1d5ea72e74e1eaeec06c22d501d8c6cc22b5c41190a7e10218a03c",
-    "ui/src/app.jsx": "7e4286eb560ed901e5a41d44b89f918dda411873139053da2debdc444690dd9a",
-    "ui/src/batch-test-sms.jsx": "7ec10342393e2847c41219e0952489fc31a21e09ca112bbdfb319a56451a89f4",
-    "ui/src/batch.jsx": "8d35c36070febf763b3dc5c54f1b135d973d0d8e1f1d75013ba19d8884bbe89e",
-    "ui/src/client.js": "a4e16af359944f2f898b3ff43fd1c600e716733070816ff16b0689cb9c12ab6d",
+    "ui/package-lock.json": "24f39b8aab1f03d001e12e5a3a6484f439042a47804c3552bc2f53b88edcc697",
+    "ui/package.json": "50389679a22acc9db527157a8a955145dbec8e136404f8c720f5a3ecb92bcccb",
+    "ui/src/app.jsx": "0f8a12dd4880ef754d4b82b446f9e3b2f2a9c5082e2d3d3de4f328afb387eaea",
+    "ui/src/batch-test-sms.jsx": "e1b1a6f281b8c52c10779b0740c3ee486ec3761c7c5d2eb2da9469274e49759b",
+    "ui/src/batch.jsx": "1db255850cdae69b0db139efeb2b89fef5d6b7add7d22d911eb9b69893b7dfc4",
+    "ui/src/catalog.js": "c98f063cbab22ba2d50824418f34bceebdd251351d34cc9e54d7a2e04f06d600",
+    "ui/src/client.js": "205f667ed94dfdf2d4e04f75e125f8f7baa747bd84387a8b48aee5c5f98962b6",
     "ui/src/common.jsx": "62ff8b17c0c11c314aa88b373c21f03aee9b91cecab65cda4155076b38d524c5",
-    "ui/src/contracts.js": "d13612e8eeab01b2ea4895734a53697d2e4e91965ffaa96dea74b3163fa8ab75",
+    "ui/src/contracts.js": "8030814b506d999c0685c1d46e7db995f1785174627e9dcf68ef28104617e986",
     "ui/src/host.css": "e8a1d3afce88b4ea67a80ce475a0b5e8857e2060d0c14d489e46098c10532c80",
     "ui/src/main.jsx": "dd3f967f100eed2934b0c32e67ab47c746a03fa6027312693001036f631ef34f",
-    "ui/src/qualification.jsx": "2e276ace46dc60ed23eb1870046f1fadacdf32d61aca496b9b129569915310d6",
+    "ui/src/qualification.jsx": "4df8d49dde866c593a879e3f8e9a9e79c7563f390b9fd2b627d50a6305a9ff55",
+    "ui/src/send.jsx": "5552a9bb16c2f81b67b43ea2ed98e3fd29b057c2ec4327d9145997b79951072e",
     "ui/src/service.jsx": "f0ce8079245cac0e5eda1ec740236d53a29d8eb1d577274cdd8324a1a351fae1",
-    "ui/src/signature.jsx": "e2e9b6ce7dc1181033585941a33e791f0fd5a30078d31a0d1e4771b9598c672a",
+    "ui/src/signature.jsx": "49e16af9b9bb61a8bc0500bdf8239211ae5c2291eb5e0a89d3dd3e317c1649bd",
     "ui/src/styles/batch.css": "0649641a146192dc668170bb13fe614cd66d3344e438233d27ade778e4d645da",
     "ui/src/styles/qualification.css": "0d34e20e2e9dad2e3270846863f3862fab6de15ab3453039ed1de6cfc9f1aa63",
     "ui/src/styles/signature.css": "f12740e326814cc53b18e14a818c96c8d58242c0d26d8a5dc2727a2ec8338b8a",
     "ui/src/styles/traffic.css": "37280e16b103738fc62091104172fa30b000ab4f4f132c3df1136583cd5df65e",
-    "ui/src/traffic.jsx": "f959e3fb989c1312bd16d0466558191b088fbcafa90f7bb6ff6b49a509cb3917",
-    "ui/vite.config.js": "b17a2ce45951ed3b4589337e85db1fd77336fb344e3841cc6ee11c10bbddd8ba"
+    "ui/src/template-variables.js": "d4a855ad1be1b37c234ff317ec8b71e18847fc858910d4e7c2dea05813c23bb0",
+    "ui/src/template.jsx": "6bf682e4eae0116554e07f494726acabe889dec8bf59f07074ca16df92ae94ce",
+    "ui/src/traffic.jsx": "5f9dc49c6dde21ca15ede8b69202038a7466656f9fa7f51af6bfd932499b1544",
+    "ui/vite.config.js": "5f77a501a6146592b57bff3f4f67552c0017f7b7b6bfcca10ed7bf40ecbf77be"
   },
-  "htmlSha256": "c966a6d65928bc6d25c023d7f7b0a94328fde44da49c34308f7849881d2138f2"
+  "htmlSha256": "24cfd3f9c9c6919538814a56ee0ba9c03e5c2f653c44b553706fe9da0d8b61bd"
 }

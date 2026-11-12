@@ -160,3 +160,13 @@ class BatchTask(ApiModel):
         if not self.scheduled and self.send_time != 0:
             raise ValueError("立即发送任务的 sendTime 必须为 0")
         return self
+
+
+class SmsSendRequest(ApiModel):
+    """SmsSendRequest 承载用户在页面确认的发送参数，由短信接口做最终校验。"""
+
+    sub_account: Text = Field(alias="subAccount")
+    signature: Text
+    template_id: Text = Field(alias="templateId")
+    mobiles: Annotated[list[Mobile], Field(min_length=1, max_length=200)] = Field(repr=False)
+    template_params: dict[str, str] = Field(default_factory=dict, alias="templateParams", repr=False)

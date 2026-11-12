@@ -1,6 +1,7 @@
-import { fromByteArray } from 'base64-js';
+import { toByteArray } from 'base64-js';
+import CRC32 from 'crc-32';
 import config from '../../src/mcp_server_sms/form_config.json';
-import { failureSchema } from './contracts.js';
+import { failureSchema, materialUploadPlanSchema, recipientsUploadPlanSchema } from './contracts.js';
 
 export const MAX_UPLOAD_BYTES = config.maxUploadBytes;
 
@@ -23,8 +24,10 @@ export class SmsFormClient {
       response = await this.app.callServerTool({ name, arguments: args }, {
         signal: this.controller.signal, timeout: 180000,
       });
-    } catch {
-      throw new OperationError(write ? '操作结果待确认，请先查询，勿重复提交。' : '查询未完成，请检查连接后重试。', { unknown: write });
+    } catch (cause) {
+      throw new OperationError(write ? '操作结果待确认，请先查询，勿重复提交。' : '查询未完成，请检查连接后重试。', {
+        unknown: write, code: typeof cause?.code === 'number' ? String(cause.code) : 'tool_transport_error',
+      });
     }
     const envelope = response._meta?.['sms/form'] ?? response.structuredContent;
     if (response.isError || envelope?.success !== true) {
@@ -44,7 +47,96 @@ export class SmsFormClient {
   }
 
   async upload(file, request) {
-    return this.call('upload_sms_file', { request: { ...request, ...await fileInput(file) } }, { write: true });
+    // 上传完成只产生文件引用，不会提交业务申请；失败允许用户手动重选，不自动重试。
+    try {
+      const bytes = await uploadBytes(file);
+      const material = request.kind === 'material';
+      if (!material && request.kind !== 'recipients') {
+        throw new OperationError('不支持的文件上传类别。', { code: 'invalid_file_type' });
+      }
+      const metadata = material
+        ? { name: file.name, size: bytes.length, category: request.category,
+          crc32: (CRC32.buf(bytes) >>> 0).toString(16).padStart(8, '0') }
+        : { name: file.name, size: bytes.length, sub_account: request.sub_account,
+          template_id: request.template_id, sha256: await sha256(bytes) };
+      const schema = material ? materialUploadPlanSchema : recipientsUploadPlanSchema;
+      const checked = schema.safeParse(await this.call(
+        material ? 'prepare_material_upload' : 'prepare_recipients_upload',
+        { request: metadata }, { write: true },
+      ));
+      if (!checked.success || checked.data.confirmation.context.name !== file.name) {
+        throw new OperationError('上传服务返回的文件信息不完整。', { code: 'invalid_upload_plan' });
+      }
+      const plan = checked.data;
+      if (!material && ['size', 'sha256', 'sub_account', 'template_id'].some(
+        key => plan.confirmation.context[key] !== metadata[key],
+      )) {
+        throw new OperationError('上传服务返回的名单信息不一致。', { code: 'invalid_upload_plan' });
+      }
+      await this.uploadHttp(plan.upload, bytes, material);
+      const context = plan.confirmation.context;
+      // 名单在核对任务时统一回读，统计和可选的引流检查共用一次下载。
+      if (!material) return { name: file.name, file: context.file, receipt: plan.confirmation };
+      const result = await this.call('complete_material_upload', {
+        request: plan.confirmation,
+      }, { write: true });
+      const valid = result?.name === file.name
+        && result.fileContent === context.uri && result.fileSuffix === context.suffix;
+      if (!valid) throw new OperationError('文件上传结果不完整，请重新选择文件。', { code: 'invalid_upload_result' });
+      return result;
+    } catch (cause) {
+      const known = cause instanceof OperationError;
+      throw new OperationError(
+        (known && !cause.unknown ? cause.message : '文件上传未完成或结果未确认。')
+          + ' 已填内容会保留，可重新选择文件。',
+        { code: known ? cause.code : 'upload_failed', requestId: known ? cause.requestId : undefined },
+      );
+    }
+  }
+
+  async uploadHttp(upload, bytes, material) {
+    const url = new URL(upload.url);
+    const allowed = material ? config.materialUpload.uploadHosts.includes(url.hostname)
+      && url.pathname.startsWith('/upload/v1/') : url.hostname.endsWith('.volces.com');
+    if (!allowed || url.protocol !== 'https:' || url.username || url.password || url.hash
+      || url.port && url.port !== '443') {
+      throw new OperationError('上传服务返回的地址不在受信范围内。', { code: 'invalid_upload_url' });
+    }
+    const fields = { action: material ? 'UploadMaterial' : 'UploadRecipients', correlation_id: crypto.randomUUID() };
+    const started = performance.now();
+    let errorCode, httpStatus;
+    this.uploadLog({ ...fields, event: 'start' });
+    try {
+      const response = await fetch(upload.url, {
+        method: upload.method, headers: upload.headers, body: bytes,
+        credentials: 'omit', redirect: 'error',
+        signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(60000)]),
+      });
+      httpStatus = response.status;
+      if (!response.ok) {
+        throw new OperationError(`文件上传服务返回 HTTP ${response.status}。`, { code: 'upload_http_error' });
+      }
+      if (material) {
+        const result = await response.json();
+        if (result?.code !== 2000) {
+          throw new OperationError('材料服务未确认上传成功。', { code: 'upload_not_confirmed' });
+        }
+      }
+    } catch (cause) {
+      errorCode = cause instanceof OperationError ? cause.code : 'upload_transport_error';
+      throw cause instanceof OperationError ? cause
+        : new OperationError('文件传输未完成，请检查网络或客户端的上传域名许可。', { code: errorCode });
+    } finally {
+      this.uploadLog({ ...fields, event: 'end', duration_ms: Math.round(performance.now() - started),
+        result_class: errorCode ? 'failed' : 'success', error_code: errorCode, http_status: httpStatus });
+    }
+  }
+
+  uploadLog(data) {
+    // 只记录阶段、耗时与稳定错误码，不记录文件名、内容、地址、票据或授权头。
+    try { console.info('sms_upload', data); } catch { /* 日志失败不改变上传结果。 */ }
+    try { this.app.sendLog?.({ level: 'info', logger: 'sms.upload', data })?.catch(() => {}); }
+    catch { /* 宿主未提供日志通道时仍保留页面日志，不影响上传。 */ }
   }
 
   async downloadCsv(value) {
@@ -74,13 +166,30 @@ export class SmsFormClient {
   dispose() { this.controller.abort(); }
 }
 
-export async function fileInput(file) {
-  if (!file || (file.data === undefined && (file.size === 0 || file.size > MAX_UPLOAD_BYTES))) {
-    throw new OperationError('请选择不超过 10 MB 的非空文件。');
+async function uploadBytes(file) {
+  if (!file || typeof file.name !== 'string' || !file.name) {
+    throw new OperationError('请选择文件。', { code: 'invalid_file' });
   }
-  const data = file.data ?? fromByteArray(new Uint8Array(await file.arrayBuffer()));
-  return { name: file.name, data };
+  if (file.data !== undefined && (typeof file.data !== 'string'
+    || file.data.length > Math.ceil(MAX_UPLOAD_BYTES / 3) * 4
+    || file.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(file.data))) {
+    throw new OperationError('预填文件编码无效或超过 10 MB。', { code: 'invalid_file' });
+  }
+  if (file.data === undefined && (!file.size || file.size > MAX_UPLOAD_BYTES)) {
+    throw new OperationError('请选择不超过 10 MB 的非空文件。', { code: 'invalid_file_size' });
+  }
+  const bytes = file.data === undefined ? new Uint8Array(await file.arrayBuffer()) : toByteArray(file.data);
+  if (!bytes.length || bytes.length > MAX_UPLOAD_BYTES) {
+    throw new OperationError('请选择不超过 10 MB 的非空文件。', { code: 'invalid_file_size' });
+  }
+  return bytes;
 }
+
+async function sha256(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+}
+
 
 export function page(result, rowSchema) {
   const rows = result?.list ?? result?.List ?? result?.items ?? result?.Items;
