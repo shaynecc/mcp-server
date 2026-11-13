@@ -2,7 +2,7 @@
 html, body, #root { margin: 0; min-height: 0; min-width: 280px; background: transparent; }
 body { font-family: var(--font-sans, Inter, "PingFang SC", system-ui, sans-serif); }
 .sms-app { color: #1d2129; background: #f5f6f8; }
-.sms-app:not(:has(.qualification-wizard)) { max-width: 1000px; }
+.sms-app:not(:has(.qualification-wizard, .signature-shell)) { max-width: 1000px; }
 .qualification-fields { min-width: 0; margin: 0; padding: 0; border: 0; }
 .sms-app .wizard-page, .sms-app .batch-page { min-height: 0; }
 .sms-app:not(:has(.qualification-wizard)) .wizard-workspace { min-height: 0; grid-template-columns: 220px minmax(0, 1fr); }
@@ -10,10 +10,7 @@ body { font-family: var(--font-sans, Inter, "PingFang SC", system-ui, sans-serif
 .sms-mobile-step { display: none; }
 .sms-app:not(:has(.qualification-wizard)) .wizard-content { padding: 22px; }
 .sms-app:not(:has(.qualification-wizard)) .wizard-body, .sms-app .batch-body { padding: 16px 0; }
-.sms-app .signature-shell { min-height: 0; padding: 16px; }
-.sms-app .signature-page { padding: 0 22px 22px; }
-.sms-app .signature-header { margin: 0 -22px; padding: 22px; }
-.sms-app .signature-panel { padding: 20px; }
+.sms-app .signature-shell { min-height: 0; }
 .sms-app .traffic-page { margin: 0 auto; padding: 20px; }
 .sms-app .traffic-card { margin-top: 16px; padding: 20px; }
 .sms-app .batch-section { padding: 22px; }
@@ -39,6 +36,24 @@ body[arco-theme='dark'] .sms-app :is(
   .mobile-verification, .review-section
 ) { color: #f2f3f5; background: #232324; border-color: #484849; }
 body[arco-theme='dark'] .sms-app .signature-eyebrow { color: var(--color-text-1); background: var(--color-primary-light-1); }
+body[arco-theme='dark'] .sms-app :is(.signature-subsection,.signature-qualification,.signature-preview) {
+  color: var(--color-text-1); background: var(--color-bg-2); border-color: var(--color-border-2);
+}
+body[arco-theme='dark'] .sms-app :is(.signature-field > label,.signature-step,.signature-upload__trigger) {
+  color: var(--color-text-1);
+}
+body[arco-theme='dark'] .sms-app :is(.signature-choice-group > label,.signature-panel__title,.signature-summary) {
+  border-color: var(--color-border-2);
+}
+body[arco-theme='dark'] .sms-app :is(.signature-static-options span,.signature-choice-group > label.is-selected) {
+  color: var(--color-text-1); background: var(--color-primary-light-1); border-color: var(--color-primary-light-3);
+}
+body[arco-theme='dark'] .sms-app :is(.signature-step span,.signature-panel__title > span) {
+  color: var(--color-text-2); background: var(--color-fill-2); border-color: var(--color-border-2);
+}
+body[arco-theme='dark'] .sms-app .signature-step.is-active span {
+  color: #fff; background: #165dff; border-color: #165dff;
+}
 body[arco-theme='dark'] .sms-app :is(h1,h2,h3,.wizard-title,.step-heading h2,.traffic-field label) { color: #f2f3f5; }
 body[arco-theme='dark'] .sms-app :is(p,.step-description,.wizard-subtitle,.signature-header p,.batch-title-row p) { color: #c9cdd4; }
 body[arco-theme='dark'] .sms-app pre { background: #17171a; color: #f2f3f5; }
@@ -49,8 +64,5 @@ body[arco-theme='dark'] .sms-app .upload-zone { border-color: #6b6b71; }
   .sms-mobile-step { display: block; color: #165dff; margin-bottom: 12px; font-size: 13px; }
   .sms-app:not(:has(.qualification-wizard)) .wizard-content, .sms-app .batch-section { padding: 16px; }
   .sms-app:not(:has(.qualification-wizard)) .form-grid, .sms-app .traffic-fields { grid-template-columns: 1fr; }
-  .sms-app .signature-page { padding: 0 16px 16px; }
-  .sms-app .signature-header { margin: 0 -16px; padding: 18px 16px; }
-  .sms-app .signature-shell { padding: 8px; }
   .sms-app .traffic-page { padding: 12px; }
 }

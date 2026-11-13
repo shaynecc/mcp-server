@@ -72,7 +72,7 @@ it('未知写入结果不会解锁重试或返回修改', async () => {
 });
 
 it('签名申请使用已选资质的归属和私密附件，不修改原始签名', () => {
-  const values = { content: '测试签名', source: 2, appIcpFilling: '备案一号' };
+  const values = { content: '测试签名', source: 2, appIcp: { appIcpFilling: '备案一号' } };
   const qualification = { id: 12, purpose: 2, materialName: '示例资质', businessCertificateName: '示例测试签名公司' };
   const { request: result, attachmentNames } = signaturePreview(values, qualification, 'all', { app: [{ fileContent: 'private/app', fileSuffix: 'png', name: 'app.png' }], trademark: [], other: [] });
   expect(result).toMatchObject({ content: '测试签名', purpose: 2, signatureIdentificationID: 12, isLimitSubAccount: 0, subAccounts: [] });
@@ -93,14 +93,13 @@ it('签名表单保留消息组范围选择和提交前确认', async () => {
   expect(screen.getByLabelText('签名内容').value).toBe('示例企业');
   await user.clear(screen.getByLabelText('签名内容'));
   await type(user, '签名内容', '测试签名');
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
+  await user.click(screen.getByRole('button', { name: '下一步' }));
+  await user.click(screen.getByRole('button', { name: '核对申请' }));
   expect(api.call.mock.calls.filter(([name]) => name === 'submit_signature')).toHaveLength(0);
-  await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
-  const submit = screen.getByRole('button', { name: '确认承担风险并提交' });
-  expect(submit.disabled).toBe(true);
-  await user.click(screen.getByText('我了解签名可能审核或报备失败，仍要提交'));
-  await user.click(submit);
-  await screen.findByText('签名申请结果');
+  await user.click(screen.getByRole('button', { name: '强制提交' }));
+  expect(api.call).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: '确认承担风险并提交' }));
+  await screen.findByText('签名申请已提交');
   expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toEqual([
     ['GetApplySignatureBind', {}],
   ]);
@@ -118,8 +117,7 @@ it('签名候选一次读取完整数组，超过一百条的预填资质也不�
   const api = client({ query: vi.fn(async action => action === 'GetApplySignatureBind'
     ? rows : { list: [], total: 0 }) });
   render(<SignatureForm client={api} prefill={{ signatureIdentificationID: 128, isLimitSubAccount: 0 }} />);
-  await screen.findByText('资质128 · 自用');
-  expect(screen.getByLabelText('签名内容').value).toBe('主体128');
+  await waitFor(() => expect(screen.getByLabelText('签名内容').value).toBe('主体128'));
   expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toEqual([
     ['GetApplySignatureBind', {}],
   ]);
@@ -131,8 +129,10 @@ it.each([[null], [[]]])('签名候选为空时不补查完整资质列表或生�
   const api = client({ query: vi.fn(async action => action === 'GetApplySignatureBind'
     ? candidates : { list: [], total: 0 }) });
   render(<SignatureForm client={api} prefill={{ content: '测试签名', isLimitSubAccount: 0 }} />);
-  await waitFor(() => expect(screen.getByRole('button', { name: '核对申请信息' }).disabled).toBe(false));
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
+  await screen.findByRole('button', { name: '下一步' });
+  await choose(user, '签名归属类型', '自用');
+  await user.click(screen.getByRole('button', { name: '下一步' }));
+  await user.click(screen.getByRole('button', { name: '核对申请' }));
   await screen.findByText('请选择审核通过的资质。');
   expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toHaveLength(1);
   expect(api.call).not.toHaveBeenCalled();
@@ -234,11 +234,9 @@ it('宿主预填签名、适用消息组和证明材料，真实查询后才选�
   const user = userEvent.setup();
   const proof = { name: '商标证明.pdf', data: 'Zml4dHVyZQ==' };
   const api = client({
-    query: vi.fn(async (action, params) => action === 'GetApplySignatureBind'
+    query: vi.fn(async action => action === 'GetApplySignatureBind'
       ? [{ id: 12, purpose: 1, materialName: '可用资质', businessCertificateName: '宿主填写的签名公司' }]
-      : params.subAccount
-        ? { list: [{ subAccountId: 'g', subAccountName: '已核实的消息组' }], total: 1 }
-        : { list: [], total: 1 }),
+      : { list: [{ subAccountId: 'g', subAccountName: '已核实的消息组' }], total: 1 }),
     upload: vi.fn().mockResolvedValue({ name: proof.name, fileContent: 'fixture/proof', fileSuffix: 'pdf' }),
   });
   render(<SmsApp client={api} ready supported toolResult={openDraft('signature', {
@@ -247,27 +245,29 @@ it('宿主预填签名、适用消息组和证明材料，真实查询后才选�
     trademark: { trademarkCn: '测试品牌', trademarkEn: 'Example', trademarkNumber: '0001',
       trademarkFileList: [proof] },
   })} />);
-  expect(await screen.findByText('可用资质 · 自用')).toBeTruthy();
   expect(await screen.findByText('已核实的消息组')).toBeTruthy();
   expect(screen.getByLabelText('签名内容').value).toBe('宿主填写的签名');
+  expect(screen.getByLabelText('申请说明').value).toBe(' 保留说明原文 ');
+  await user.click(screen.getByRole('button', { name: '下一步' }));
+  expect(screen.getByText('12【宿主填写的签名公司】· 自用')).toBeTruthy();
   expect(screen.getByLabelText('商标中文名').value).toBe('测试品牌');
   expect(screen.getByLabelText('商标英文名').value).toBe('Example');
   expect(screen.getByLabelText('商标注册号').value).toBe('0001');
-  expect(screen.getByLabelText('申请说明（选填）').value).toBe(' 保留说明原文 ');
-  expect(screen.getByLabelText('项目名称（选填）').value).toBe('宿主项目');
+  expect(screen.queryByLabelText('项目名称（选填）')).toBeNull();
   expect(screen.getByText('商标证明.pdf（待上传）')).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
+  await user.click(screen.getByRole('button', { name: '核对申请' }));
   expect(await screen.findByText('请先上传或移除待上传的材料。')).toBeTruthy();
   expect(api.upload).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: '上传 商标证明.pdf' }));
+  fireEvent.click(document.querySelector('[data-material="trademark"] .arco-upload-list-start-icon'));
   expect(await screen.findByText('商标证明.pdf')).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
-  expect((await screen.findByRole('button', { name: '确认提交' })).disabled).toBe(true);
-  expect(screen.getByText('商标证明.pdf')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: '核对申请' }));
+  expect((await screen.findByRole('button', { name: '确认提交' })).disabled).toBe(false);
   await user.click(screen.getByRole('button', { name: '返回修改' }));
-  await choose(user, '签名来源', '公司全称／简称');
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
-  expect((await screen.findByRole('button', { name: '确认提交' })).disabled).toBe(true);
+  await user.click(screen.getByRole('button', { name: '上一步' }));
+  await choose(user, '签名类型', '公司全称／简称');
+  await user.click(screen.getByRole('button', { name: '下一步' }));
+  await user.click(screen.getByRole('button', { name: '核对申请' }));
+  expect((await screen.findByRole('button', { name: '确认提交' })).disabled).toBe(false);
   expect(screen.queryByText('商标证明.pdf')).toBeNull();
   expect(api.call).not.toHaveBeenCalled();
   expect(api.query.mock.calls.filter(([action]) => action === 'GetApplySignatureBind')).toHaveLength(1);

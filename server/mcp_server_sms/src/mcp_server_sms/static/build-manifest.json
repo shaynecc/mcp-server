@@ -13,14 +13,16 @@
     "ui/src/contracts.js": "c578814f7e62cc1b2c92f90b0f7c99396b32cee86742d5690c04adf6c6c89556",
     "ui/src/display-mode.js": "ba7e891492c88e3a5fd59ff3a8d16aaac76fbd12ff45b5e86ee04779847bc2fc",
     "ui/src/files.jsx": "729dab47c4db47ffa61c529180976e7f9e9c21c9533648c21aef009601c9f009",
-    "ui/src/host.css": "b0fc96623084ff901b54765ea1aad39b74d7d6eab1d297da2ffdec868fa1ceed",
+    "ui/src/host.css": "3e71af5d9ccd576c764efabe8ce2b45e5ee585ba2a23c7d94c12938e53990dcf",
     "ui/src/main.jsx": "7851ac69ec3db94975a3f2a18437a2948f30f0ef37ed77237cd99e4b68ec17b5",
     "ui/src/qualification-controller.js": "72b4c6de8cd574b3ae10240002c1331954e6bc39fc6d8a54bd89c31c1e42f73f",
     "ui/src/qualification-wizard.jsx": "5fe7b68bc32f5ba46f9fae4dd3460ba99d668a91c43b3cb2a63b844788548191",
     "ui/src/qualification.jsx": "d21207a0617c202690a879a96a8f69f8fec1b9f3f6de32bca4e7acb52c50f2d2",
     "ui/src/send.jsx": "5552a9bb16c2f81b67b43ea2ed98e3fd29b057c2ec4327d9145997b79951072e",
     "ui/src/service.jsx": "0ff5163cd382bd63b89f5db918bdd4505e4beb9b435d102b3a49abdd5f7e943b",
-    "ui/src/signature.jsx": "49e16af9b9bb61a8bc0500bdf8239211ae5c2291eb5e0a89d3dd3e317c1649bd",
+    "ui/src/signature-controller.js": "4a286aac8451f51d1f4b5ef68ffd1c16ab95bf2f8172839e7c5cb157984130c3",
+    "ui/src/signature-upload.jsx": "14098d6192751666c4f9731ac5e7a5b60026793bded276f3de6ad859907f2afb",
+    "ui/src/signature.jsx": "2365e14f125e43c65f3e5642f84acfab305574012abc56538f69fc14d2c35858",
     "ui/src/styles/batch.css": "0649641a146192dc668170bb13fe614cd66d3344e438233d27ade778e4d645da",
     "ui/src/styles/qualification.css": "0d34e20e2e9dad2e3270846863f3862fab6de15ab3453039ed1de6cfc9f1aa63",
     "ui/src/styles/signature.css": "f12740e326814cc53b18e14a818c96c8d58242c0d26d8a5dc2727a2ec8338b8a",
@@ -30,5 +32,5 @@
     "ui/src/traffic.jsx": "5f9dc49c6dde21ca15ede8b69202038a7466656f9fa7f51af6bfd932499b1544",
     "ui/vite.config.js": "8528c3ae9e50f93872b58562ba2cbb4b4b7c1d2d78e2d9e0b88073579eb69765"
   },
-  "htmlSha256": "cf8831f9fabd8f20d23f4434ecf07778ee7644f3bfd2c552cf221315fb99e7c2"
+  "htmlSha256": "a1c3e54bf02fc37d887221f3e435acf2facec1461c8c917de66b918b6319ef18"
 }
