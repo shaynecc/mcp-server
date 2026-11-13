@@ -6,6 +6,7 @@ import './styles/qualification.css';
 import './styles/signature.css';
 import './styles/traffic.css';
 import './styles/batch.css';
+import './styles/service.css';
 import './host.css';
 import { SmsApp } from './app.jsx';
 import { SmsFormClient } from './client.js';

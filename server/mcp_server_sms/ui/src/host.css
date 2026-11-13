@@ -30,12 +30,22 @@ body { font-family: var(--font-sans, Inter, "PingFang SC", system-ui, sans-serif
 .sms-app .traffic-actions { padding-bottom: 6px; }
 .sms-app .traffic-kind { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
 .sms-app .traffic-kind .arco-select { width: 160px; }
+.sms-app:has(.service-page) { display: flow-root; }
+.sms-app .service-link { min-width: 0; height: auto; padding: 0; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+.sms-app .service-link-fallback { min-width: 0; overflow-wrap: anywhere; }
+.sms-app .service-link-fallback code { display: block; font-size: 12px; color: var(--color-text-3); }
+.sms-app .service-protocols li { padding: 10px 0; }
+.sms-app .service-support { margin-top: 18px; font-size: 12px; color: var(--color-text-2); overflow-wrap: anywhere; }
+.sms-app .service-support p { margin: 4px 0; }
+.sms-app .service-support-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.sms-app .service-consent .arco-checkbox { display: inline-flex; align-items: flex-start; }
+.sms-app .service-consent .arco-checkbox-mask { flex-shrink: 0; margin-top: 4px; }
 body[arco-theme='dark'] .sms-app { color: #f2f3f5; background: #17171a; }
 body[arco-theme='dark'] .sms-app :is(
   .wizard-header, .wizard-workspace, .wizard-sidebar,
   .signature-shell, .signature-page, .signature-panel, .traffic-card,
   .batch-header, .batch-sheet, .batch-section, .batch-actions, .batch-message-content,
-  .mobile-verification, .review-section
+  .mobile-verification, .review-section, .service-panel, .service-result
 ) { color: #f2f3f5; background: #232324; border-color: #484849; }
 body[arco-theme='dark'] .sms-app .signature-eyebrow { color: var(--color-text-1); background: var(--color-primary-light-1); }
 body[arco-theme='dark'] .sms-app :is(.signature-subsection,.signature-qualification,.signature-preview) {
@@ -64,6 +74,11 @@ body[arco-theme='dark'] .sms-app .traffic-field .arco-input[readonly] {
   color: var(--color-text-3); background: var(--color-fill-2);
 }
 body[arco-theme='dark'] .sms-app .traffic-eyebrow { color: rgb(var(--primary-6)); }
+body[arco-theme='dark'] .sms-app :is(.service-product,.service-protocols,.service-protocols li) { border-color: var(--color-border-2); }
+body[arco-theme='dark'] .sms-app .service-product-icon { color: rgb(var(--primary-6)); background: var(--color-primary-light-1); }
+body[arco-theme='dark'] .sms-app .service-protocols-index { color: var(--color-text-2); background: var(--color-fill-2); }
+body[arco-theme='dark'] .sms-app .service-brand { color: rgb(var(--primary-6)); }
+body[arco-theme='dark'] .sms-app .service-hint { color: var(--color-text-3); }
 @media (max-width: 620px) {
   .sms-app .wizard-workspace { display: block; }
   .sms-app:not(:has(.qualification-wizard)) .wizard-sidebar { display: none; }

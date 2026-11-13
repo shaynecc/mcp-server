@@ -4,6 +4,8 @@ import config from '../../src/mcp_server_sms/form_config.json';
 import sampleProof from './sample-proof.png?inline';
 
 // 仅用于本地可视验证。没有真实 API 客户端、账号凭据或线上请求。
+const previewParams = new URLSearchParams(window.location.search);
+const previewWidth = previewParams.get('width') === 'narrow' ? '390px' : '960px';
 const rank = Object.fromEntries(['isOnlyTwoElement', 'isSkipOtherUse', 'needOtherUseCheck', 'operatorThreeElement', 'needOperatorImage', 'needOperatorMobile', 'responsibleThreeElement', 'needResponsibleImage', 'needResponsibleMobile', 'needBusinessCertificateImage'].map(key => [key, false]));
 const group = { subAccountId: 'demo-group', subAccountName: '客户通知' };
 const sendPrefill = { signature: '演示科技', templateId: 'demo-template', mobiles: ['13800000000'],
@@ -36,6 +38,13 @@ const scenarios = {
       { number: '4008000000', company: '演示科技有限公司', numberProvince: '江苏', numberCity: '南京' },
     ] } },
   ],
+  service: [
+    { id: 'renewal', label: '协议更新', serviceStatus: 'protocol_confirmation_required' },
+    { id: 'pending', label: '开通待生效', serviceStatus: 'activation_pending' },
+    { id: 'unknown', label: '提交结果待核实', serviceStatus: 'submission_outcome_unknown' },
+    { id: 'closed', label: '服务欠费关闭', serviceStatus: 'arrears_closed' },
+    { id: 'available', label: '已开通', serviceStatus: 'available' },
+  ],
   send: [
     { id: 'missing_group', label: '预填：待补消息组', prefill: sendPrefill },
     { id: 'missing_signature', label: '预填：待补签名', prefill: { ...sendPrefill, subAccount: 'demo-group', signature: undefined } },
@@ -60,7 +69,7 @@ function displayMode(mode) {
   const expanded = mode === 'fullscreen';
   document.getElementById('mount').classList.toggle('preview-side-panel', expanded);
   if (frame) {
-    frame.style.width = expanded ? '100%' : '960px';
+    frame.style.width = expanded ? '100%' : previewWidth;
     frame.style.height = expanded ? '100%' : '540px';
   }
 }
@@ -124,10 +133,13 @@ function tool({ name, arguments: args }) {
   if (name === 'submit_traffic_resources') return response('');
   if (name === 'submit_sms_service_onboarding') serviceAvailable = true;
   if (name === 'get_sms_service_onboarding' || name === 'submit_sms_service_onboarding') {
+    const status = serviceAvailable ? 'available' : (scenario.serviceStatus ?? 'activation_required');
+    const canSubmit = ['activation_required', 'reopening_required', 'protocol_confirmation_required'].includes(status);
     return response({
-      status: serviceAvailable ? 'available' : 'activation_required', businessName: '演示科技有限公司',
-      protocols: config.smsOnboarding.protocols, pricingUrl: config.smsOnboarding.pricingUrl,
-      consoleUrl: config.smsOnboarding.consoleUrl, ...(serviceAvailable ? {} : { confirmation: 'demo-confirmation' }),
+      status, businessName: '演示科技有限公司',
+      protocols: canSubmit ? (status === 'protocol_confirmation_required' ? config.smsOnboarding.protocols.slice(0, 2) : config.smsOnboarding.protocols) : [],
+      pricingUrl: config.smsOnboarding.pricingUrl, consoleUrl: config.smsOnboarding.consoleUrl,
+      ...(canSubmit ? { confirmation: 'demo-confirmation' } : {}),
     }, true);
   }
   if (name === 'send_verification_code') return response({ messageId: 'demo-message' });
@@ -146,7 +158,7 @@ async function open() {
   frame?.remove(); displayMode('inline'); called = 0; taskReads = 0; taskStatus = 2; serviceAvailable = false;
   scenario = (scenarios[form] ?? []).find(item => item.id === scenarioSelect.value) ?? {};
   frame = document.createElement('iframe');
-  frame.title = '短信表单'; frame.style.width = '960px'; frame.style.height = '540px';
+  frame.title = '短信表单'; frame.style.width = previewWidth; frame.style.height = '540px';
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
   document.getElementById('mount').appendChild(frame);
   bridge = new AppBridge(null, { name: 'SMS local preview', version: '1' }, { serverTools: {}, downloadFile: {} }, {
@@ -154,6 +166,11 @@ async function open() {
   });
   bridge.oncalltool = async params => tool(params);
   bridge.onupdatemodelcontext = async () => ({});
+  bridge.onsizechange = ({ height }) => {
+    if (Number.isFinite(height) && height > 0 && !document.getElementById('mount').classList.contains('preview-side-panel')) {
+      frame.style.height = `${height}px`;
+    }
+  };
   // This local host maps the standard expanded mode to a right panel for visual verification.
   bridge.onrequestdisplaymode = async ({ mode }) => {
     const actual = mode === 'fullscreen' ? 'fullscreen' : 'inline';
@@ -192,5 +209,14 @@ document.getElementById('inline').addEventListener('click', () => {
   displayMode('inline');
   bridge.setHostContext({ displayMode: 'inline' });
 });
+const initialForm = previewParams.get('form');
+if ([...document.getElementById('form').options].some(option => option.value === initialForm)) {
+  document.getElementById('form').value = initialForm;
+}
+document.getElementById('dark').checked = previewParams.get('theme') === 'dark';
 updateScenarios();
+const initialScenario = previewParams.get('scenario');
+if ([...document.getElementById('scenario').options].some(option => option.value === initialScenario)) {
+  document.getElementById('scenario').value = initialScenario;
+}
 open();

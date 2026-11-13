@@ -2,7 +2,7 @@
 
 七种表单由同一个自包含 HTML 资源承载。使用官方 MCP Apps SDK 的 AppBridge 调用本服务工具，不依赖 localhost HTTP 或浏览器存储。文件使用服务端下发的单文件能力直传 ImageX/TOS，账号 AK/SK 不进入页面。
 
-`src/styles/{qualification,signature,traffic,batch}.css` 原样复制自 byted-sms-sender 1.4.6 对应的 `*_wizard.css`（参考仓库提交 e3d7e1f997671590cb1c26d1977f0dcd19abcba2）。布局和组件沿用 React 18.2.0、Arco 2.66.15；窄屏、对话卡片和主题覆盖在 `host.css` 中维护。这里的构建和运行都不读取或修改 Skill。
+`src/styles/{qualification,signature,traffic,batch,service}.css` 原样复制自 byted-sms-sender 1.4.6 对应的 `*_wizard.css`（参考仓库提交 e3d7e1f997671590cb1c26d1977f0dcd19abcba2）。布局和组件沿用 React 18.2.0、Arco 2.66.15；窄屏、对话卡片和主题覆盖在 `host.css` 中维护。这里的构建和运行都不读取或修改 Skill。
 
 图片附件支持本地缩略图和点击放大，保留原上传控件、表单布局和业务调用。选中图片后预览本地 File，上传成功后在页面保留 Blob；预填 Base64 图片直接预览。替换、移除或页面卸载会释放 Blob URL，切回步骤时可从页面内的 Blob 恢复预览。只有远端文件引用时仍显示文件名，不额外查询 ImageX/TOS。预览数据不会进入业务提交或模型摘要。
 
@@ -18,7 +18,7 @@ npm run build
 
 构建输出 `../src/mcp_server_sms/static/forms.html`，由 Python 包随 wheel 分发。业务数据不能写入 HTML。修改前端后需重新构建再打 Python 包。
 
-`npm run dev` 后打开 `/dev/preview.html` 可预览七个表单、窄屏和深色模式。这里使用官方 AppBridge 与跨源双 iframe 沙箱及模拟业务数据。`dev/sandbox.ts` 复用官方 ext-apps 的 basic-host 沙箱。生产构建不包含这些预览代码。构建器生成的 `THIRD_PARTY_LICENSES.md` 随 Python 包分发。
+`npm run dev` 后打开 `/dev/preview.html` 可预览七个表单、窄屏和深色模式，内嵌高度随 AppBridge 通知自动调整。可用 `?form=service&scenario=renewal&theme=dark&width=narrow` 直接打开指定预览；省略参数使用默认值。这里使用官方 AppBridge 与跨源双 iframe 沙箱及模拟业务数据。`dev/sandbox.ts` 复用官方 ext-apps 的 basic-host 沙箱。生产构建不包含这些预览代码。构建器生成的 `THIRD_PARTY_LICENSES.md` 随 Python 包分发。
 
 上传使用 `prepare_*` → 存储 HTTPS 直传 → `complete_*`。CSV 直传后在核对任务时调用 `complete_recipients_upload`，一次回读共同完成校验与可选引流检查；相同输入的完整结果可在当前页面复用。`uploads.test.jsx` 使用严格的 32,000 字符宿主模拟与合成大文件回归；真实豆包的 CSP、CORS、上传授权与接口权限需另做联调。文件上传失败允许重选，正式提交结果未知仍锁定。
 
@@ -37,5 +37,7 @@ npm run build
 MCP 宿主可能不允许原生表单提交，签名页的“下一步”和“核对申请”、引流页的“预览录入内容”直接通过按钮事件执行；普通输入框的 Enter 同样触发页面动作。交互不依赖 iframe 的 `allow-forms` 权限，回归测试同时覆盖宿主阻断原生 `submit` 时的按钮与 Enter 操作。
 
 本地样式预览不进行文件上传，也不伪装成功；上传行为由 `uploads.test.jsx` 的合成大文件与模拟 HTTP 回归验证。真实宿主测试需单独授权。
+
+服务开通页沿用 Skill 的国内短信产品卡片、编号协议清单、Arco `Checkbox/Button/Spin/Result` 及首次开通、重新签署、取消和完成文案。协议、计费和控制台链接通过宿主 `openLink` 打开，无该能力时回显完整地址。首次打开仅调用 `get_sms_service_onboarding`，勾选后才向 `submit_sms_service_onboarding` 提交当前 `confirmation`；协议签署和商品开通由 MCP 执行。刷新撤销旧同意，已知失败必须刷新并重新勾选；已受理或未知写入不能被旧可提交状态解锁。取消只结束当前页面并报告 `abandoned`。结果页保留状态刷新、原始失败及排障编号，`service.test.jsx` 覆盖这些行为；预览支持协议更新、待生效、未知结果、欠费关闭及已开通场景。
 
 普通发送和群发试发仅把用户确认的原生发送参数交给 MCP，展示用模板正文留在页面，不在提交前再次查询。群发核对复用已选模板及 CSV 列定义，文件、列定义或引流正文改变时重新检查；上传账号绑定、文件完整性和一次回读保留。引流录入按接口受理结果展示，不再等待逐条资源 ID 回读。

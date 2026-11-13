@@ -13,18 +13,19 @@
     "ui/src/contracts.js": "c578814f7e62cc1b2c92f90b0f7c99396b32cee86742d5690c04adf6c6c89556",
     "ui/src/display-mode.js": "ba7e891492c88e3a5fd59ff3a8d16aaac76fbd12ff45b5e86ee04779847bc2fc",
     "ui/src/files.jsx": "729dab47c4db47ffa61c529180976e7f9e9c21c9533648c21aef009601c9f009",
-    "ui/src/host.css": "3d1bd6309b1814c04577de61b7beb15d9593521d283426c65ab6d515e3743850",
-    "ui/src/main.jsx": "7851ac69ec3db94975a3f2a18437a2948f30f0ef37ed77237cd99e4b68ec17b5",
+    "ui/src/host.css": "59fa3767d1352d7cc375c0388345406ec540694c97d978468cf9957558e1a467",
+    "ui/src/main.jsx": "67d1ac9c9c3c04a0b32aacc1f23a5e605d4fb9d3b5c738a5c808354babcd6f7c",
     "ui/src/qualification-controller.js": "72b4c6de8cd574b3ae10240002c1331954e6bc39fc6d8a54bd89c31c1e42f73f",
     "ui/src/qualification-wizard.jsx": "5fe7b68bc32f5ba46f9fae4dd3460ba99d668a91c43b3cb2a63b844788548191",
     "ui/src/qualification.jsx": "d21207a0617c202690a879a96a8f69f8fec1b9f3f6de32bca4e7acb52c50f2d2",
     "ui/src/send.jsx": "5552a9bb16c2f81b67b43ea2ed98e3fd29b057c2ec4327d9145997b79951072e",
-    "ui/src/service.jsx": "0ff5163cd382bd63b89f5db918bdd4505e4beb9b435d102b3a49abdd5f7e943b",
+    "ui/src/service.jsx": "8cbc7f98e56ee8946b5232fe80bd2781075d2e58652b5c3c89ebea010adfddd5",
     "ui/src/signature-controller.js": "4a286aac8451f51d1f4b5ef68ffd1c16ab95bf2f8172839e7c5cb157984130c3",
     "ui/src/signature-upload.jsx": "14098d6192751666c4f9731ac5e7a5b60026793bded276f3de6ad859907f2afb",
     "ui/src/signature.jsx": "2365e14f125e43c65f3e5642f84acfab305574012abc56538f69fc14d2c35858",
     "ui/src/styles/batch.css": "0649641a146192dc668170bb13fe614cd66d3344e438233d27ade778e4d645da",
     "ui/src/styles/qualification.css": "0d34e20e2e9dad2e3270846863f3862fab6de15ab3453039ed1de6cfc9f1aa63",
+    "ui/src/styles/service.css": "6d21c06585b14b9b3ca6b188f82b525433435bc469f4278c81ef6cdaad9924c5",
     "ui/src/styles/signature.css": "f12740e326814cc53b18e14a818c96c8d58242c0d26d8a5dc2727a2ec8338b8a",
     "ui/src/styles/traffic.css": "37280e16b103738fc62091104172fa30b000ab4f4f132c3df1136583cd5df65e",
     "ui/src/template-variables.js": "d4a855ad1be1b37c234ff317ec8b71e18847fc858910d4e7c2dea05813c23bb0",
@@ -33,5 +34,5 @@
     "ui/src/traffic.jsx": "be623f2d93d86401349559aebe196c04524f65d391585e63e73ee1a1cce11348",
     "ui/vite.config.js": "8528c3ae9e50f93872b58562ba2cbb4b4b7c1d2d78e2d9e0b88073579eb69765"
   },
-  "htmlSha256": "ea8b9d72122762044e105e140982dd444a9c0217f09b572ba9efaa3b70fb74a7"
+  "htmlSha256": "c5e8f44f9ee136685d1d4a9646676f981aaa7a56daaa864f4f38f202f701ccbc"
 }

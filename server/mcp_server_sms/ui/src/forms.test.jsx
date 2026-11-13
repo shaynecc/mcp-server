@@ -460,15 +460,15 @@ it('开通表单展示协议，单独确认后提交，刷新未生效时不再�
     ? view : { status: 'activation_pending', requestId: 'activation-request' }) });
   render(<SmsApp client={api} ready supported toolResult={openDraft('service', {})} />);
   expect(await screen.findByText('测试服务协议', { exact: false })).toBeTruthy();
-  const submit = screen.getByRole('button', { name: '确认签署并开通' });
+  const submit = screen.getByRole('button', { name: '同意协议并开通' });
   expect(submit.disabled).toBe(true);
   expect(api.call.mock.calls).toEqual([['get_sms_service_onboarding']]);
-  await user.click(screen.getByText('我已阅读并同意以上协议及计费说明'));
+  await user.click(screen.getByRole('checkbox'));
   await user.click(submit);
   await screen.findByText('开通请求已受理，等待状态更新');
   expect(api.call).toHaveBeenCalledWith('submit_sms_service_onboarding', { confirmation: 'confirm-current' }, { write: true });
   await user.click(screen.getByRole('button', { name: '刷新服务状态' }));
-  expect(screen.queryByRole('button', { name: '确认签署并开通' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '同意协议并开通' })).toBeNull();
 });
 
 it('群发试发须单独确认，查询对应回执，名单引流检查与正式创建分开', async () => {
