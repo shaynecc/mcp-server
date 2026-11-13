@@ -13,7 +13,7 @@
     "ui/src/contracts.js": "c578814f7e62cc1b2c92f90b0f7c99396b32cee86742d5690c04adf6c6c89556",
     "ui/src/display-mode.js": "ba7e891492c88e3a5fd59ff3a8d16aaac76fbd12ff45b5e86ee04779847bc2fc",
     "ui/src/files.jsx": "729dab47c4db47ffa61c529180976e7f9e9c21c9533648c21aef009601c9f009",
-    "ui/src/host.css": "3e71af5d9ccd576c764efabe8ce2b45e5ee585ba2a23c7d94c12938e53990dcf",
+    "ui/src/host.css": "3d1bd6309b1814c04577de61b7beb15d9593521d283426c65ab6d515e3743850",
     "ui/src/main.jsx": "7851ac69ec3db94975a3f2a18437a2948f30f0ef37ed77237cd99e4b68ec17b5",
     "ui/src/qualification-controller.js": "72b4c6de8cd574b3ae10240002c1331954e6bc39fc6d8a54bd89c31c1e42f73f",
     "ui/src/qualification-wizard.jsx": "5fe7b68bc32f5ba46f9fae4dd3460ba99d668a91c43b3cb2a63b844788548191",
@@ -29,8 +29,9 @@
     "ui/src/styles/traffic.css": "37280e16b103738fc62091104172fa30b000ab4f4f132c3df1136583cd5df65e",
     "ui/src/template-variables.js": "d4a855ad1be1b37c234ff317ec8b71e18847fc858910d4e7c2dea05813c23bb0",
     "ui/src/template.jsx": "6bf682e4eae0116554e07f494726acabe889dec8bf59f07074ca16df92ae94ce",
-    "ui/src/traffic.jsx": "5f9dc49c6dde21ca15ede8b69202038a7466656f9fa7f51af6bfd932499b1544",
+    "ui/src/traffic-controller.js": "f10daf16d1804f23d109b8aa262e45d9081269bd0dc50f78f3843bbabfaef6f3",
+    "ui/src/traffic.jsx": "be623f2d93d86401349559aebe196c04524f65d391585e63e73ee1a1cce11348",
     "ui/vite.config.js": "8528c3ae9e50f93872b58562ba2cbb4b4b7c1d2d78e2d9e0b88073579eb69765"
   },
-  "htmlSha256": "a1c3e54bf02fc37d887221f3e435acf2facec1461c8c917de66b918b6319ef18"
+  "htmlSha256": "ea8b9d72122762044e105e140982dd444a9c0217f09b572ba9efaa3b70fb74a7"
 }

@@ -34,7 +34,7 @@ async function choose(user, label, text) {
   await user.click(option);
 }
 
-it('引流必须先预览并勾选确认，重复点击只提交一次', async () => {
+it('引流必须先预览再确认录入，重复点击只提交一次', async () => {
   const user = userEvent.setup();
   let resolve;
   const api = client({ call: vi.fn(name => name === 'preview_traffic_resource'
@@ -43,16 +43,16 @@ it('引流必须先预览并勾选确认，重复点击只提交一次', async (
   await type(user, '文案链接', 'https://example.com/Path?Q=One');
   await type(user, '文案域名备案号', '备案一号');
   await type(user, '文案域名备案主体', '测试企业');
-  await user.click(screen.getByRole('button', { name: '核对信息' }));
+  expect(screen.queryByRole('button', { name: '确认录入' })).toBeNull();
+  await user.click(screen.getByRole('button', { name: '预览录入内容' }));
   expect(api.call.mock.calls.map(([name]) => name)).toEqual(['preview_traffic_resource']);
-  const submit = screen.getByRole('button', { name: '确认提交' });
-  expect(submit.disabled).toBe(true);
-  await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
+  const submit = screen.getByRole('button', { name: '确认录入' });
+  expect(submit.disabled).toBe(false);
   await user.dblClick(submit);
   expect(api.call).toHaveBeenCalledTimes(2);
   expect(api.call.mock.calls[1][1].request.params.data[0].link).toBe('https://example.com/Path?Q=One');
   resolve('');
-  await screen.findByText('引流录入已受理');
+  await screen.findByText('引流信息已提交');
   expect(api.report).toHaveBeenCalledWith({ form: 'traffic', state: 'accepted', kind: 'link', count: 1 });
 });
 
@@ -62,12 +62,14 @@ it('未知写入结果不会解锁重试或返回修改', async () => {
     .mockRejectedValueOnce(new OperationError('结果待确认', { unknown: true })) });
   render(<TrafficForm client={api} />);
   await type(user, '文案链接', 'https://example.com'); await type(user, '文案域名备案号', '备案'); await type(user, '文案域名备案主体', '企业');
-  await user.click(screen.getByRole('button', { name: '核对信息' }));
-  await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
-  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await user.click(screen.getByRole('button', { name: '预览录入内容' }));
+  await user.click(screen.getByRole('button', { name: '确认录入' }));
   await screen.findByText('结果待确认');
-  expect(screen.getByRole('button', { name: '确认提交' }).disabled).toBe(true);
-  expect(screen.getByRole('button', { name: '返回修改' }).disabled).toBe(true);
+  for (const name of ['确认录入', '预览录入内容', '添加一条', '结束本次录入']) {
+    expect(screen.getByRole('button', { name }).disabled).toBe(true);
+  }
+  expect(screen.getByLabelText('文案链接').disabled).toBe(true);
+  expect(screen.getByLabelText('使用火山短链').getAttribute('aria-disabled')).toBe('true');
   expect(api.call).toHaveBeenCalledTimes(2);
 });
 
@@ -283,11 +285,11 @@ it('宿主预填引流链接，普通链接与火山短链保留各自行的备�
       jumpLinkDomainIcp: '测试跳转备案号', jumpLinkDomainIcpBody: '跳转域名主体' },
   ] })} />);
   expect(screen.getByLabelText('文案链接').value).toBe('http://example.com/Original?Q=One');
-  expect(screen.getByLabelText('跳转链接').value).toBe('https://example.com/Go?Next=2');
+  expect(screen.getAllByLabelText('跳转链接').map(field => field.value)).toEqual(['', 'https://example.com/Go?Next=2']);
   expect(screen.getByLabelText('文案域名备案号').value).toBe('测试文案备案号');
-  expect(screen.getByLabelText('跳转域名备案主体').value).toBe('跳转域名主体');
-  await user.click(screen.getByRole('button', { name: '核对信息' }));
-  expect((await screen.findByRole('button', { name: '确认提交' })).disabled).toBe(true);
+  expect(screen.getAllByLabelText('跳转域名备案主体').map(field => field.value)).toEqual(['', '跳转域名主体']);
+  await user.click(screen.getByRole('button', { name: '预览录入内容' }));
+  expect((await screen.findByRole('button', { name: '确认录入' })).disabled).toBe(false);
   expect(api.call.mock.calls.map(([name]) => name)).toEqual(['preview_traffic_resource']);
 });
 
@@ -308,17 +310,20 @@ it('宿主预填引流手机和企业号码，私密字段只在对应行显示'
   expect(api.call).not.toHaveBeenCalled();
 });
 
-it('引流部分预填显示跳转字段，保留缺失协议让客户确认', async () => {
+it('引流部分预填识别文案协议，火山短链缺少备案时在字段旁校验', async () => {
   const user = userEvent.setup();
   const api = client();
   render(<TrafficForm client={api} prefill={{ kind: 'link', data: [
     { link: 'http://example.com/Path', linkDomainIcp: '备案号', linkDomainIcpBody: '备案主体' },
-    { jumpLink: 'https://example.com/Go' },
+    { useVolcLink: true, jumpLink: 'https://example.com/Go' },
   ] }} />);
   expect(screen.getByLabelText('文案链接').value).toBe('http://example.com/Path');
-  expect(screen.getByLabelText('跳转链接').value).toBe('https://example.com/Go');
-  await user.click(screen.getByRole('button', { name: '核对信息' }));
-  expect(await screen.findByText('请填写文案链接协议。')).toBeTruthy();
+  expect(screen.getAllByLabelText('跳转链接').map(field => field.value)).toEqual(['', 'https://example.com/Go']);
+  expect(screen.getByLabelText('文案链接协议').textContent).toContain('http');
+  await user.click(screen.getByRole('button', { name: '预览录入内容' }));
+  expect(screen.getAllByLabelText('跳转域名备案号')[1].getAttribute('aria-invalid')).toBe('true');
+  expect(screen.getAllByLabelText('跳转域名备案主体')[1].getAttribute('aria-invalid')).toBe('true');
+  expect(screen.getAllByText('此项必填')).toHaveLength(2);
   expect(api.call).not.toHaveBeenCalled();
 });
 

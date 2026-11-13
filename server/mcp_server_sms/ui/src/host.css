@@ -28,6 +28,8 @@ body { font-family: var(--font-sans, Inter, "PingFang SC", system-ui, sans-serif
 .sms-app:not(:has(.qualification-wizard)) .arco-input, .sms-app .arco-select { width: 100%; }
 .sms-app pre { overflow: auto; max-height: 180px; padding: 12px; background: #f7f8fa; }
 .sms-app .traffic-actions { padding-bottom: 6px; }
+.sms-app .traffic-kind { display: flex; align-items: center; gap: 12px; margin-top: 20px; }
+.sms-app .traffic-kind .arco-select { width: 160px; }
 body[arco-theme='dark'] .sms-app { color: #f2f3f5; background: #17171a; }
 body[arco-theme='dark'] .sms-app :is(
   .wizard-header, .wizard-workspace, .wizard-sidebar,
@@ -58,6 +60,10 @@ body[arco-theme='dark'] .sms-app :is(h1,h2,h3,.wizard-title,.step-heading h2,.tr
 body[arco-theme='dark'] .sms-app :is(p,.step-description,.wizard-subtitle,.signature-header p,.batch-title-row p) { color: #c9cdd4; }
 body[arco-theme='dark'] .sms-app pre { background: #17171a; color: #f2f3f5; }
 body[arco-theme='dark'] .sms-app .upload-zone { border-color: #6b6b71; }
+body[arco-theme='dark'] .sms-app .traffic-field .arco-input[readonly] {
+  color: var(--color-text-3); background: var(--color-fill-2);
+}
+body[arco-theme='dark'] .sms-app .traffic-eyebrow { color: rgb(var(--primary-6)); }
 @media (max-width: 620px) {
   .sms-app .wizard-workspace { display: block; }
   .sms-app:not(:has(.qualification-wizard)) .wizard-sidebar { display: none; }

@@ -21,6 +21,21 @@ const scenarios = {
     { id: 'image', label: '图片回显', prefill: { content: '演示科技', source: 3, signatureIdentificationID: 101,
       isLimitSubAccount: 0, trademark: { trademarkNumber: 'DEMO-001', trademarkFileList: [material] } } },
   ],
+  traffic: [
+    { id: 'links', label: '链接与跳转预填', prefill: { kind: 'link', data: [
+      { useVolcLink: false, link: 'https://www.example.com/Notice?Source=SMS',
+        linkDomainIcp: '演示文案备案号', linkDomainIcpBody: '演示科技有限公司',
+        jumpLink: 'https://landing.example.com/Detail?Item=One',
+        jumpLinkDomainIcp: '演示跳转备案号', jumpLinkDomainIcpBody: '演示科技有限公司' },
+      { useVolcLink: true, jumpLink: 'https://landing.example.com/Activity?From=SMS',
+        jumpLinkDomainIcp: '演示跳转备案号', jumpLinkDomainIcpBody: '演示科技有限公司' },
+    ] } },
+    { id: 'phones', label: '手机与企业号码', prefill: { kind: 'phone', data: [
+      { number: '13800000000', numberPerson: '演示号主', personType: 1,
+        numberProvince: '北京', numberCity: '北京' },
+      { number: '4008000000', company: '演示科技有限公司', numberProvince: '江苏', numberCity: '南京' },
+    ] } },
+  ],
   send: [
     { id: 'missing_group', label: '预填：待补消息组', prefill: sendPrefill },
     { id: 'missing_signature', label: '预填：待补签名', prefill: { ...sendPrefill, subAccount: 'demo-group', signature: undefined } },
