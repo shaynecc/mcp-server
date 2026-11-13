@@ -1,6 +1,7 @@
 import { AppBridge, PostMessageTransport } from '@modelcontextprotocol/ext-apps/app-bridge';
 import html from '../../src/mcp_server_sms/static/forms.html?raw';
 import config from '../../src/mcp_server_sms/form_config.json';
+import sampleProof from './sample-proof.png?inline';
 
 // 仅用于本地可视验证。没有真实 API 客户端、账号凭据或线上请求。
 const rank = Object.fromEntries(['isOnlyTwoElement', 'isSkipOtherUse', 'needOtherUseCheck', 'operatorThreeElement', 'needOperatorImage', 'needOperatorMobile', 'responsibleThreeElement', 'needResponsibleImage', 'needResponsibleMobile', 'needBusinessCertificateImage'].map(key => [key, false]));
@@ -10,7 +11,16 @@ const sendPrefill = { signature: '演示科技', templateId: 'demo-template', mo
 const templatePrefill = { name: '预约通知草稿', content: '您预约的服务时间为 ${time}，请准时到店。',
   signatures: ['演示科技'], templateParams: [{ name: 'time', paramType: 1 }] };
 const task = { subAccount: 'demo-group', taskId: 'demo-task' };
+const material = { name: '本地示例图片.png', data: sampleProof.split(',')[1] };
 const scenarios = {
+  qualification: [
+    { id: 'image', label: '图片回显', prefill: { materialName: '演示企业资质',
+      businessInfo: { businessCertificate: material } } },
+  ],
+  signature: [
+    { id: 'image', label: '图片回显', prefill: { content: '演示科技', source: 3, signatureIdentificationID: 101,
+      isLimitSubAccount: 0, trademark: { trademarkNumber: 'DEMO-001', trademarkFileList: [material] } } },
+  ],
   send: [
     { id: 'missing_group', label: '预填：待补消息组', prefill: sendPrefill },
     { id: 'missing_signature', label: '预填：待补签名', prefill: { ...sendPrefill, subAccount: 'demo-group', signature: undefined } },

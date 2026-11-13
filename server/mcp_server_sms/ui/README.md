@@ -4,6 +4,8 @@
 
 `src/styles/{qualification,signature,traffic,batch}.css` 原样复制自 byted-sms-sender 1.4.6 对应的 `*_wizard.css`（参考仓库提交 e3d7e1f997671590cb1c26d1977f0dcd19abcba2）。布局和组件沿用 React 18.2.0、Arco 2.66.15；窄屏、对话卡片和主题覆盖在 `host.css` 中维护。这里的构建和运行都不读取或修改 Skill。
 
+图片附件支持本地缩略图和点击放大，保留原上传控件、表单布局和业务调用。选中图片后预览本地 File，上传成功后在页面保留 Blob；预填 Base64 图片直接预览。替换、移除或页面卸载会释放 Blob URL，切回步骤时可从页面内的 Blob 恢复预览。只有远端文件引用时仍显示文件名，不额外查询 ImageX/TOS。预览数据不会进入业务提交或模型摘要。
+
 前端开发使用 Node.js 22.12 或以上版本；部署预构建的 Python wheel 不需要 Node.js。
 
 ```bash

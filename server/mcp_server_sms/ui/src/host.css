@@ -19,6 +19,9 @@ body { font-family: var(--font-sans, Inter, "PingFang SC", system-ui, sans-serif
 .sms-app .span-2 { grid-column: 1 / -1; }
 .sms-app .upload-zone { min-height: 90px; padding: 14px; border: 1px dashed #c9cdd4; border-radius: 6px; text-align: center; }
 .sms-file { display: flex; align-items: center; justify-content: space-between; gap: 8px; overflow-wrap: anywhere; }
+.sms-file-content { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sms-file-preview { flex-shrink: 0; }
+.sms-file-preview .arco-image-img { object-fit: contain; }
 .sms-catalog-count { margin: 6px 0 12px; font-size: 12px; color: #86909c; }
 .sms-feedback { margin: 12px 0; }
 .sms-check { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }

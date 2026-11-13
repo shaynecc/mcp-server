@@ -85,7 +85,9 @@ export class SmsFormClient {
       const valid = result?.name === file.name
         && result.fileContent === context.uri && result.fileSuffix === context.suffix;
       if (!valid) throw new OperationError('文件上传结果不完整，请重新选择文件。', { code: 'invalid_upload_result' });
-      return result;
+      // 本地 Blob 只供当前表单回显；业务提交仍由 materialPreview 显式提取文件引用。
+      return ['jpg', 'jpeg', 'png', 'gif'].includes(result.fileSuffix)
+        ? { ...result, localFile: new Blob([bytes], { type: file.type }) } : result;
     } catch (cause) {
       if (cause instanceof OperationError) throw cause;
       throw new OperationError(cause instanceof Error ? cause.message : String(cause), { code: 'upload_failed' });

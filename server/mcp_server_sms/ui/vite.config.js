@@ -39,7 +39,7 @@ export default defineConfig({
     name: 'local-sandbox-csp',
     configureServer(server) {
       server.middlewares.use('/dev/sandbox.html', (_request, response, next) => {
-        response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; frame-src 'self'; object-src 'none'");
+        response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; frame-src 'self'; object-src 'none'");
         next();
       });
     },

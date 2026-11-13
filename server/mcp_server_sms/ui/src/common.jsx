@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useId, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Input, Select } from '@arco-design/web-react';
-import { IconUpload } from '@arco-design/web-react/icon';
 import { OperationError } from './client.js';
+export { Files } from './files.jsx';
 
 const LockContext = createContext(false);
 export function LockedFields({ locked, children }) {
@@ -23,30 +23,6 @@ export function Choice({ label, value, onChange, options, ...props }) {
   const id = useId();
   return <Field label={label}><Select id={id} aria-label={label} value={value} onChange={onChange}
     options={options.map(([value, label]) => ({ value, label }))} {...props} /></Field>;
-}
-
-export function Files({ label, accept, value = [], onSelect, onRemove, multiple = false, disabled = false, uploadDisabled = disabled }) {
-  const input = useRef(null);
-  return <div className="upload-block">
-    <div className="upload-label">{label}</div>
-    <div className="upload-zone">
-      <IconUpload className="upload-icon" />
-      <Button disabled={uploadDisabled} onClick={() => input.current?.click()}>选择并上传</Button>
-      <input ref={input} hidden type="file" aria-label={label} accept={accept} multiple={multiple}
-        disabled={uploadDisabled} onChange={event => {
-          const selected = Array.from(event.target.files ?? []);
-          event.target.value = '';
-          if (selected.length) onSelect(selected);
-        }} />
-      <div className="upload-tip">单个文件最大 10 MB</div>
-    </div>
-    {value.map((file, index) => <div className="sms-file" key={index}>
-      <span>{file.name}{file.data !== undefined && '（待上传）'}</span>
-      {file.data !== undefined && <Button type="text" disabled={uploadDisabled} aria-label={`上传 ${file.name}`}
-        onClick={() => onSelect([file], index)}>上传</Button>}
-      <Button type="text" disabled={disabled} onClick={() => onRemove(index)}>移除</Button>
-    </div>)}
-  </div>;
 }
 
 export function useOperation() {

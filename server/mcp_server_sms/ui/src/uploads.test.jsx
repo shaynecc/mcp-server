@@ -53,7 +53,10 @@ it.each([7314599, MAX_UPLOAD_BYTES])('材料 %i 字节通过严格宿主限制�
   const bytes = new Uint8Array(size).fill(97);
   bytes.set([137, 80, 78, 71, 13, 10, 26, 10]);
   const { app, fetch, client } = fixture();
-  expect((await client.upload(selected(bytes), { kind: 'material', category: 'business' })).fileContent).toBe(uri);
+  const result = await client.upload(selected(bytes), { kind: 'material', category: 'business' });
+  expect(result.fileContent).toBe(uri);
+  expect(result.localFile).toBeInstanceOf(Blob);
+  expect(result.localFile.size).toBe(size);
   expect(app.callServerTool.mock.calls.map(([c]) => c.name)).toEqual(['prepare_material_upload', 'complete_material_upload']);
   for (const [call] of app.callServerTool.mock.calls) {
     expect(JSON.stringify(call.arguments).length).toBeLessThan(32000);
@@ -139,5 +142,13 @@ it('资质表单上传失败保留输入并允许重新选择，重选成功显�
   fireEvent.change(input, { target: { files: [selected(new Uint8Array([1, 2, 3]))] } });
   await screen.findByText('proof.png');
   await waitFor(() => expect(screen.queryByText('fixture network error')).toBeNull());
+  expect((await screen.findByRole('img', { name: '营业证件' })).getAttribute('src')).toMatch(/^blob:/);
+  fetch.mockRejectedValueOnce(new TypeError('replacement upload failed'));
+  fireEvent.change(input, { target: { files: [selected(new Uint8Array([4, 5, 6]), 'replacement.png')] } });
+  await screen.findByText('replacement upload failed');
+  expect(screen.getByText('proof.png')).toBeTruthy();
+  expect(screen.queryByText('replacement.png')).toBeNull();
+  expect(screen.getByRole('img', { name: '营业证件' }).getAttribute('src')).toMatch(/^blob:/);
   expect(app.callServerTool.mock.calls.some(([c]) => c.name === 'submit_qualification')).toBe(false);
+  expect(app.callServerTool.mock.calls.some(([c]) => c.name === 'recognize_qualification_document')).toBe(false);
 });

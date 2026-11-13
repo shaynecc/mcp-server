@@ -8,10 +8,11 @@
     "ui/src/batch-test-sms.jsx": "e1b1a6f281b8c52c10779b0740c3ee486ec3761c7c5d2eb2da9469274e49759b",
     "ui/src/batch.jsx": "7138fa7c05df1b95d3b04740a7a43663a975d16f492132759cb002d3c81e00b2",
     "ui/src/catalog.js": "c98f063cbab22ba2d50824418f34bceebdd251351d34cc9e54d7a2e04f06d600",
-    "ui/src/client.js": "f3b5efab0433fcf269a56cd45c6bd8bb5f925defc09bce5cb4e66a4801dd90fd",
-    "ui/src/common.jsx": "29104270d518e90e65b456ac0039a16084481a4efb12c55a51b128d85ea30222",
+    "ui/src/client.js": "be65939c623b392747160426553bcf129708c1d531e5669502c90b21b7516e47",
+    "ui/src/common.jsx": "69d804278129396260ecf962ae9b076d345521e13f9e05c42ebf9bf6d68f558d",
     "ui/src/contracts.js": "7c492289bfbaef1d33a6dcdffc476704701385600393f26b3cb9bb25d146c8ee",
-    "ui/src/host.css": "e8a1d3afce88b4ea67a80ce475a0b5e8857e2060d0c14d489e46098c10532c80",
+    "ui/src/files.jsx": "729dab47c4db47ffa61c529180976e7f9e9c21c9533648c21aef009601c9f009",
+    "ui/src/host.css": "270fb9163eef65f90f5dd91abedb3a2e8a6c58e232fb0eaff370842184057e09",
     "ui/src/main.jsx": "dd3f967f100eed2934b0c32e67ab47c746a03fa6027312693001036f631ef34f",
     "ui/src/qualification.jsx": "ebb2a3fce8af38ac500824fc87c14bcfba1a80f659aa5e166f8c38af0cbe34d6",
     "ui/src/send.jsx": "5552a9bb16c2f81b67b43ea2ed98e3fd29b057c2ec4327d9145997b79951072e",
@@ -24,7 +25,7 @@
     "ui/src/template-variables.js": "d4a855ad1be1b37c234ff317ec8b71e18847fc858910d4e7c2dea05813c23bb0",
     "ui/src/template.jsx": "6bf682e4eae0116554e07f494726acabe889dec8bf59f07074ca16df92ae94ce",
     "ui/src/traffic.jsx": "5f9dc49c6dde21ca15ede8b69202038a7466656f9fa7f51af6bfd932499b1544",
-    "ui/vite.config.js": "5f77a501a6146592b57bff3f4f67552c0017f7b7b6bfcca10ed7bf40ecbf77be"
+    "ui/vite.config.js": "8528c3ae9e50f93872b58562ba2cbb4b4b7c1d2d78e2d9e0b88073579eb69765"
   },
-  "htmlSha256": "663201af24cb497994d55fe26c407b158ad61513166c26be7c52944f60f18651"
+  "htmlSha256": "7b04aadb148c34ea3aa87ac9af863b3d17d2c897702c6c83c6c01d9d23307af2"
 }
