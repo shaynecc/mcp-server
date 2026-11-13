@@ -75,8 +75,8 @@ export class SmsFormClient {
       )) {
         throw new OperationError('上传服务返回的名单信息不一致。', { code: 'invalid_upload_plan' });
       }
-      await this.uploadHttp(plan.upload, bytes, material);
       const context = plan.confirmation.context;
+      await this.uploadHttp(plan.upload, bytes, material, context.uri);
       // 名单在核对任务时统一回读，统计和可选的引流检查共用一次下载。
       if (!material) return { name: file.name, file: context.file, receipt: plan.confirmation };
       const result = await this.call('complete_material_upload', {
@@ -94,10 +94,11 @@ export class SmsFormClient {
     }
   }
 
-  async uploadHttp(upload, bytes, material) {
+  async uploadHttp(upload, bytes, material, materialUri) {
     const url = new URL(upload.url);
     const allowed = material ? config.materialUpload.uploadHosts.includes(url.hostname)
-      && url.pathname.startsWith('/upload/v1/') : url.hostname.endsWith('.volces.com');
+      && decodeURIComponent(url.pathname) === '/' + materialUri && !url.search
+      : url.hostname.endsWith('.volces.com');
     if (!allowed || url.protocol !== 'https:' || url.username || url.password || url.hash
       || url.port && url.port !== '443') {
       throw new OperationError('上传服务返回的地址不在受信范围内。', { code: 'invalid_upload_url' });
@@ -120,8 +121,13 @@ export class SmsFormClient {
       }
       if (material) {
         const result = await response.json();
-        if (result?.code !== 2000) {
-          throw new OperationError('材料服务未确认上传成功。', { code: 'upload_not_confirmed' });
+        if (result?.success !== 0) {
+          throw new OperationError(typeof result?.error === 'string' ? result.error
+            : result?.error?.message ?? JSON.stringify(result), {
+            code: result?.error?.code ?? 'upload_not_confirmed', httpStatus,
+            backendResponse: result,
+            requestId: response.headers?.get('x-tos-request-id') ?? response.headers?.get('x-tt-logid'),
+          });
         }
       }
     } catch (cause) {

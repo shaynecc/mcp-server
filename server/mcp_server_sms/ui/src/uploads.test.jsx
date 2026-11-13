@@ -14,7 +14,7 @@ const selected = (bytes, name = 'proof.png') => ({ name, size: bytes.length, arr
 beforeEach(() => { vi.stubGlobal('crypto', webcrypto); vi.spyOn(console, 'info').mockImplementation(() => {}); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-function fixture({ recipients = false, failPrepare = false, failComplete = false, url } = {}) {
+function fixture({ recipients = false, failPrepare = false, failComplete = false, url, materialUri = uri } = {}) {
   const app = { sendLog: vi.fn().mockResolvedValue(undefined), callServerTool: vi.fn(async ({ name, arguments: args }) => {
     // 宿主的实际限制针对整个 arguments，文件不享有例外。
     if (JSON.stringify(args).length > 32000) throw Object.assign(new Error('fixture limit'), { code: -32602 });
@@ -27,24 +27,24 @@ function fixture({ recipients = false, failPrepare = false, failComplete = false
     if (name.startsWith('prepare_')) {
       if (failPrepare) throw Object.assign(new Error('fixture-private-error'), { code: -32603 });
       return envelope({
-        upload: { method: recipients ? 'PUT' : 'POST',
+        upload: { method: 'PUT',
           url: url ?? (recipients ? 'https://bucket.tos-cn-beijing.volces.com/fixture.csv?signature=private'
-            : 'https://' + config.materialUpload.uploadHosts[0] + '/upload/v1/' + uri),
-          headers: recipients ? {} : { Authorization: 'fixture-file-auth' } },
+            : 'https://' + config.materialUpload.uploadHosts[0] + '/' + materialUri),
+          headers: recipients ? {} : { Authorization: 'fixture-file-auth', 'Content-CRC32': args.request.crc32 } },
         confirmation: { signature, context: recipients
           ? { ...args.request, file: 'fixture.csv', expires_at: 9999999999 }
-          : { name: args.request.name, suffix: 'png', uri, session_key: 'fixture-session', expires_at: 9999999999 } },
+          : { name: args.request.name, suffix: 'png', uri: materialUri, session_key: 'fixture-session', expires_at: 9999999999 } },
       });
     }
     if (name.startsWith('complete_')) {
       if (failComplete) throw new Error('fixture-private-error');
       return envelope(recipients
         ? { name: args.request.context.name, file: args.request.context.file, totalCount: 6000, dupCount: 5999, receipt: args.request }
-        : { name: args.request.context.name, fileContent: uri, fileSuffix: 'png' });
+        : { name: args.request.context.name, fileContent: args.request.context.uri, fileSuffix: 'png' });
     }
     throw new Error('unexpected tool');
   }) };
-  const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ code: 2000 }) });
+  const fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: 0, error: null, payload: {} }) });
   vi.stubGlobal('fetch', fetch);
   return { app, fetch, client: new SmsFormClient(app) };
 }
@@ -63,7 +63,9 @@ it.each([7314599, MAX_UPLOAD_BYTES])('材料 %i 字节通过严格宿主限制�
     expect(call.arguments.request.data).toBeUndefined();
   }
   expect(Buffer.from(fetch.mock.calls[0][1].body).equals(Buffer.from(bytes))).toBe(true);
-  expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST', credentials: 'omit', redirect: 'error' });
+  expect(fetch.mock.calls[0][0]).toBe('https://' + config.materialUpload.uploadHosts[0] + '/' + uri);
+  expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'PUT', credentials: 'omit', redirect: 'error',
+    headers: { 'Content-CRC32': app.callServerTool.mock.calls[0][0].arguments.request.crc32 } });
   const logs = JSON.stringify(app.sendLog.mock.calls);
   expect(logs).toContain('start'); expect(logs).toContain('end');
   expect(logs).not.toContain('fixture-file-auth'); expect(logs).not.toContain('proof.png');
@@ -102,11 +104,25 @@ it.each([0, MAX_UPLOAD_BYTES + 1])('拒绝 %i 字节文件，不请求上传权�
     .rejects.toMatchObject({ code: 'invalid_file_size', unknown: false });
   expect(app.callServerTool).not.toHaveBeenCalled(); expect(fetch).not.toHaveBeenCalled();
 });
-it.each(['http://127.0.0.1/upload/v1/x', 'https://evil.example/upload/v1/x', 'https://evil.volces.com.example/upload/v1/x'])('拒绝非受信地址 %s', async url => {
+it.each([
+  'http://127.0.0.1/bucket/proof.png', 'https://evil.example/bucket/proof.png',
+  'https://evil.volces.com.example/bucket/proof.png', 'https://tos-d-ct-hl.snssdk.com/bucket/proof.png',
+  `https://${config.materialUpload.uploadHosts[0]}/bucket/other.png`,
+  `https://${config.materialUpload.uploadHosts[0]}/upload/v1/${uri}`,
+  `https://${config.materialUpload.uploadHosts[0]}/${uri}?unexpected=value`,
+])('拒绝非固定入口或与授权对象不一致的地址 %s', async url => {
   const { app, fetch, client } = fixture({ url });
   await expect(client.upload(selected(new Uint8Array([1])), { kind: 'material', category: 'business' }))
     .rejects.toMatchObject({ code: 'invalid_upload_url', unknown: false });
   expect(fetch).not.toHaveBeenCalled(); expect(app.callServerTool).toHaveBeenCalledTimes(1);
+});
+it.each(config.materialUpload.uploadHosts)('固定入口 %s 支持包含空格、中文和特殊字符的对象路径', async host => {
+  const materialUri = 'bucket/sub dir/名 #?%.png';
+  const url = `https://${host}/bucket/sub%20dir/%E5%90%8D%20%23%3F%25.png`;
+  const { client, fetch } = fixture({ url, materialUri });
+  const result = await client.upload(selected(new Uint8Array([1, 2, 3])), { kind: 'material', category: 'business' });
+  expect(fetch.mock.calls[0][0]).toBe(url);
+  expect(result.fileContent).toBe(materialUri);
 });
 it.each(['prepare', 'transfer', 'confirm'])('%s 失败可以重选，业务提交连接异常保留原文', async stage => {
   const { app, fetch, client } = fixture({ failPrepare: stage === 'prepare', failComplete: stage === 'confirm' });
@@ -128,6 +144,14 @@ it('HTTP 和业务上传错误均停止，不调用完成确认', async () => {
   await expect(client.upload(selected(new Uint8Array([1])), { kind: 'material', category: 'business' }))
     .rejects.toMatchObject({ code: 'upload_not_confirmed' });
   expect(app.callServerTool.mock.calls.every(([c]) => c.name === 'prepare_material_upload')).toBe(true);
+});
+it('固定入口返回业务错误时保留错误原文、错误码和完整响应', async () => {
+  const { app, fetch, client } = fixture();
+  const body = { success: 1, error: { code: 'InvalidCRC', message: ' 原始校验失败\n请核对文件 ' }, payload: { detail: 'original' } };
+  fetch.mockResolvedValue({ ok: true, status: 200, json: async () => body, headers: new Headers({ 'x-tt-logid': 'image-request' }) });
+  await expect(client.upload(selected(new Uint8Array([1, 2, 3])), { kind: 'material', category: 'business' }))
+    .rejects.toMatchObject({ message: body.error.message, code: 'InvalidCRC', backendResponse: body, requestId: 'image-request', httpStatus: 200, unknown: false });
+  expect(app.callServerTool).toHaveBeenCalledTimes(1);
 });
 it('资质表单上传失败保留输入并允许重新选择，重选成功显示附件', async () => {
   const { app, fetch, client } = fixture();

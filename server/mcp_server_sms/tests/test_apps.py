@@ -205,7 +205,8 @@ def test_ui_resource_is_self_contained_and_uses_standard_apps_metadata(api_calls
     content = response.json()["result"]["contents"][0]
     assert content["mimeType"] == "text/html;profile=mcp-app"
     assert content["_meta"]["ui"]["csp"]["connectDomains"] == [
-        *("https://" + host for host in IMAGEX["uploadHosts"]),
+        f"https://{IMAGEX['serviceId']}.up.imagex-accelerate.volces.com",
+        f"https://{IMAGEX['serviceId']}.up.imagex-cn-north-1.volces.com",
         "https://batch-sms-bucket.tos-cn-beijing.volces.com",
     ]
     assert content["_meta"]["ui"]["csp"]["resourceDomains"] == []
@@ -256,7 +257,7 @@ def material_api(request):
     )
 
 
-def image_responder(request, calls, upload_host=None):
+def image_responder(request, calls, upload_host=None, store_uri="bucket/material.png"):
     calls.append(request)
     action = request.url.params.get("Action")
     if action == "ApplyImageUpload":
@@ -268,7 +269,7 @@ def image_responder(request, calls, upload_host=None):
                         "UploadHosts": [upload_host or f"{IMAGEX['serviceId']}.up.imagex-accelerate.volces.com"],
                         "SessionKey": "fixture-session",
                         "StoreInfos": [
-                            {"StoreUri": "bucket/material.png", "Auth": "fixture-upload-auth"}
+                            {"StoreUri": store_uri, "Auth": "fixture-upload-auth"}
                         ],
                     }
                 }
@@ -277,9 +278,9 @@ def image_responder(request, calls, upload_host=None):
         )
     if action == "CommitImageUpload":
         return httpx.Response(
-            200, json={"Result": {"Results": [{"Uri": "bucket/material.png", "UriStatus": 2000}]}}
+            200, json={"Result": {"Results": [{"Uri": store_uri, "UriStatus": 2000}]}}
         )
-    return httpx.Response(200, json={"code": 2000})
+    raise AssertionError("MCP must not send file bytes to storage")
 
 
 
@@ -412,8 +413,9 @@ def test_bundled_html_matches_the_reviewed_frontend_sources():
     "tos-lf-x.snssdk.com", "tos-hl-x.snssdk.com",
     "tos-nc2-slb2.bytecdn.cn", "tos-nc2-slb1.bytecdn.cn",
     "tos-lf-x-tob.bytecdn.cn", "tos-lq-x-tob.bytecdn.cn", "tos-hl-x-tob.bytecdn.cn",
+    "tos-d-ct-hl.snssdk.com", "tos-d-x-lf.douyin.com", "tos-lq-x.bytedancevod.com",
 ])
-async def test_material_upload_allows_documented_service_and_legacy_hosts(host):
+async def test_dynamic_imagex_hosts_use_the_configured_fixed_upload_entry(host):
     calls = []
     request = MaterialUploadMetadata(category="identity", name="image.png", size=13, crc32="00000000")
     async with (
@@ -423,7 +425,9 @@ async def test_material_upload_allows_documented_service_and_legacy_hosts(host):
         result = await uploader.prepare_material(request, Credentials("fixture-ak", "fixture-sk"))
     assert result["confirmation"]["context"]["uri"] == "bucket/material.png"
     assert len(calls) == 1
-    assert httpx.URL(result["upload"]["url"]).host == host
+    assert result["upload"]["url"] == f"https://{IMAGEX['serviceId']}.up.imagex-accelerate.volces.com/bucket/material.png"
+    assert result["upload"]["method"] == "PUT"
+    assert result["upload"]["headers"]["Specified-Content-Type"] == "image/png"
 
 
 @pytest.mark.parametrize("host", [
@@ -432,16 +436,35 @@ async def test_material_upload_allows_documented_service_and_legacy_hosts(host):
     "tos-lf-x.snssdk.com.evil.invalid", "sub.tos-lf-x.snssdk.com",
     "unrelated.bytecdn.cn", "tos-lf-x-tob.bytecdn.cn:443",
 ])
-async def test_untrusted_material_hosts_stop_before_file_and_authorization_are_sent(host):
+async def test_upstream_hosts_cannot_redirect_the_upload_target(host):
     calls = []
     request = MaterialUploadMetadata(category="identity", name="image.png", size=21, crc32="00000000")
     async with (
         SmsClient(transport=httpx.MockTransport(material_api)) as api,
         FileUploader(api, transport=httpx.MockTransport(lambda r: image_responder(r, calls, host))) as uploader,
     ):
-        with pytest.raises(SmsRequestError) as caught:
-            await uploader.prepare_material(request, Credentials("fixture-ak", "fixture-sk"))
-    assert caught.value.result["error"]["code"] == "invalid_upload_address"
-    assert caught.value.result["error"]["outcome_unknown"] is False
+        plan = await uploader.prepare_material(request, Credentials("fixture-ak", "fixture-sk"))
+    assert httpx.URL(plan["upload"]["url"]).host == IMAGEX["uploadHosts"][0]
     assert len(calls) == 1 and calls[0].url.params["Action"] == "ApplyImageUpload"
-    assert "fixture-private-image" not in str(caught.value)
+    assert calls[0].url.host == httpx.URL(IMAGEX["endpoint"]).host
+
+
+@pytest.mark.parametrize("suffix,mime", [("png", "image/png"), ("pdf", "application/pdf")])
+async def test_fixed_material_entry_preserves_encoded_object_key_and_mime(suffix, mime):
+    calls = []
+    uri = f"bucket/sub dir/名 #?%.{suffix}"
+    request = MaterialUploadMetadata(category="app", name=f"proof.{suffix}", size=21, crc32="abcdef12")
+    async with (
+        SmsClient(transport=httpx.MockTransport(material_api)) as api,
+        FileUploader(api, transport=httpx.MockTransport(lambda r: image_responder(r, calls, "dynamic.example", uri))) as uploader,
+    ):
+        plan = await uploader.prepare_material(request, Credentials("fixture-ak", "fixture-sk"))
+    assert plan["upload"]["url"] == f"https://{IMAGEX['uploadHosts'][0]}/bucket/sub%20dir/%E5%90%8D%20%23%3F%25.{suffix}"
+    assert plan["confirmation"]["context"]["uri"] == uri
+    assert plan["upload"]["headers"] == {
+        "Authorization": "fixture-upload-auth", "Content-CRC32": "abcdef12", "Specified-Content-Type": mime,
+    }
+    if suffix == "pdf":
+        assert calls[0].url.params["FileExtension"] == ".pdf"
+    else:
+        assert "FileExtension" not in calls[0].url.params

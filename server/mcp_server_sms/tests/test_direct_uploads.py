@@ -37,7 +37,8 @@ def test_material_plan_is_private_small_and_has_no_file_body(size, caplog):
         }).json()["result"]
         assert not plan_result["isError"]
         plan = plan_result["_meta"]["sms/form"]["result"]
-        assert plan["upload"]["headers"]["X-Upload-Content-CRC32"] == "abcdef12"
+        assert plan["upload"]["method"] == "PUT"
+        assert plan["upload"]["headers"]["Content-CRC32"] == "abcdef12"
         assert len(calls) == 1  # MCP 只申请地址，不传文件字节。
         confirmation_args = {"request": plan["confirmation"]}
         completed = rpc(http, "tools/call", token=auth_header("one"), params={

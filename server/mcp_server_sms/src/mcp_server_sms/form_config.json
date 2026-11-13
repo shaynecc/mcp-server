@@ -30,15 +30,8 @@
     "userId": "sms",
     "confirmationTtlSeconds": 600,
     "uploadHosts": [
-      "2rcdq6eupd.up.imagex-cn-north-1.volces.com",
       "2rcdq6eupd.up.imagex-accelerate.volces.com",
-      "tos-lf-x.snssdk.com",
-      "tos-hl-x.snssdk.com",
-      "tos-nc2-slb2.bytecdn.cn",
-      "tos-nc2-slb1.bytecdn.cn",
-      "tos-lf-x-tob.bytecdn.cn",
-      "tos-lq-x-tob.bytecdn.cn",
-      "tos-hl-x-tob.bytecdn.cn"
+      "2rcdq6eupd.up.imagex-cn-north-1.volces.com"
     ]
   }
 }

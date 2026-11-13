@@ -32,7 +32,7 @@ const uploadRequest = {
   url: z.string().url(), headers: z.record(z.string(), z.string()),
 };
 export const materialUploadPlanSchema = z.object({
-  upload: z.object({ ...uploadRequest, method: z.literal('POST') }),
+  upload: z.object({ ...uploadRequest, method: z.literal('PUT') }),
   confirmation: z.object({
     context: z.object({
       name: fileMetadata.name, suffix: z.string().min(1), uri: z.string().min(1),

@@ -39,10 +39,8 @@ from .upload_models import (
 
 # 来自短信生产材料上传契约，与客户或部署账号无关；不是浏览器可覆盖的地址。
 IMAGEX = FORM_CONFIG["materialUpload"]
-# 当前服务的区域/加速域名及官方历史上传主机，避免向任意地址发送材料和上传授权。
+# 使用当前服务的固定上传入口，配置首项为实际上传目标；不使用动态 UploadHosts。
 # 来源：https://www.volcengine.com/docs/508/1537728
-# 历史主机：https://docs.volcengine.com/docs/veimagex/mini-programs-version-upload-sdk-access-documentation-old-version
-_MATERIAL_UPLOAD_HOSTS = frozenset(IMAGEX["uploadHosts"])
 
 _MIME = {
     "png": "image/png",
@@ -377,8 +375,8 @@ class FileUploader:
             )
             return {
                 "upload": {
-                    "url": target["url"], "method": "POST",
-                    "headers": {**target["headers"], "X-Upload-Content-CRC32": request.crc32},
+                    "url": target["url"], "method": "PUT",
+                    "headers": {**target["headers"], "Content-CRC32": request.crc32},
                 },
                 "confirmation": confirmation.model_dump(),
             }
@@ -419,36 +417,23 @@ class FileUploader:
         )
         try:
             address = applied["UploadAddress"]
-            host = address["UploadHosts"][0]
             stores = address["StoreInfos"]
-            if len(stores) != 1 or not isinstance(host, str):
+            if len(stores) != 1:
                 raise ValueError("address")
-            parsed = urlsplit("https://" + host)
-            if (
-                parsed.hostname != host or host not in _MATERIAL_UPLOAD_HOSTS
-                or parsed.port is not None or parsed.path or parsed.query or parsed.fragment
-            ):
-                raise ValueError("host")
             uri, authorization = stores[0]["StoreUri"], stores[0]["Auth"]
             bucket, separator, key = uri.partition("/")
             session_key = address["SessionKey"]
             if not bucket or not separator or not key or not authorization or not session_key:
                 raise ValueError("store")
-            upload_headers = address.get("UploadHeader", {})
-            if not isinstance(upload_headers, dict) or any(
-                not isinstance(v, str) for v in upload_headers.values()
-            ):
-                raise ValueError("headers")
         except (KeyError, IndexError, TypeError, ValueError, AttributeError):
             raise upload_error(
-                "ApplyImageUpload", "invalid_upload_address", "材料上传地址无效或不在受信主机范围内"
+                "ApplyImageUpload", "invalid_upload_address", "材料上传会话不完整"
             ) from None
         return {
             "uri": uri, "session_key": session_key,
-            "url": "https://" + host + "/upload/v1/" + quote(bucket, safe="")
-                + "/" + quote(key, safe="/"),
+            "url": "https://" + IMAGEX["uploadHosts"][0] + "/" + quote(uri, safe="/"),
             "headers": {
-                **upload_headers, "Authorization": authorization,
+                "Authorization": authorization,
                 "Specified-Content-Type": _MIME[suffix],
             },
         }

@@ -6,6 +6,8 @@
 
 图片附件支持本地缩略图和点击放大，保留原上传控件、表单布局和业务调用。选中图片后预览本地 File，上传成功后在页面保留 Blob；预填 Base64 图片直接预览。替换、移除或页面卸载会释放 Blob URL，切回步骤时可从页面内的 Blob 恢复预览。只有远端文件引用时仍显示文件名，不额外查询 ImageX/TOS。预览数据不会进入业务提交或模型摘要。
 
+材料上传按 ImageX [固定上传入口](https://www.volcengine.com/docs/508/1537728)协议执行：`PUT /<StoreUri>`，携带 `Authorization`、`Content-CRC32` 和 `Specified-Content-Type`，响应 `success: 0` 后再提交上传确认。`form_config.json` 的 `materialUpload.uploadHosts` 首项是实际入口（全球加速），区域入口保留供配置切换；服务端、前端和 CSP 共用该配置。ImageX 返回的动态 `UploadHosts` 不再作为上传目标，也不再逐一匹配历史域名。没有自动换域名重试。升级后应重新打开已有表单，加载对应上传协议的新版页面。
+
 前端开发使用 Node.js 22.12 或以上版本；部署预构建的 Python wheel 不需要 Node.js。
 
 ```bash
