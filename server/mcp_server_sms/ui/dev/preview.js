@@ -41,6 +41,14 @@ let taskReads = 0;
 let taskStatus = 2;
 let serviceAvailable = false;
 let called = 0;
+function displayMode(mode) {
+  const expanded = mode === 'fullscreen';
+  document.getElementById('mount').classList.toggle('preview-side-panel', expanded);
+  if (frame) {
+    frame.style.width = expanded ? '100%' : '960px';
+    frame.style.height = expanded ? '100%' : '540px';
+  }
+}
 function response(result, privateData = false) {
   const envelope = { success: true, result, error: null };
   return { content: [{ type: 'text', text: '模拟结果' }], structuredContent: privateData ? { ...envelope, result: null } : envelope,
@@ -120,7 +128,7 @@ async function open() {
   formSelect.disabled = true; scenarioSelect.disabled = true;
   document.getElementById('status').textContent = '正在建立标准 AppBridge 连接…';
   if (bridge) { await bridge.teardownResource({}).catch(() => {}); await bridge.close(); }
-  frame?.remove(); called = 0; taskReads = 0; taskStatus = 2; serviceAvailable = false;
+  frame?.remove(); displayMode('inline'); called = 0; taskReads = 0; taskStatus = 2; serviceAvailable = false;
   scenario = (scenarios[form] ?? []).find(item => item.id === scenarioSelect.value) ?? {};
   frame = document.createElement('iframe');
   frame.title = '短信表单'; frame.style.width = '960px'; frame.style.height = '540px';
@@ -131,6 +139,14 @@ async function open() {
   });
   bridge.oncalltool = async params => tool(params);
   bridge.onupdatemodelcontext = async () => ({});
+  // This local host maps the standard expanded mode to a right panel for visual verification.
+  bridge.onrequestdisplaymode = async ({ mode }) => {
+    const actual = mode === 'fullscreen' ? 'fullscreen' : 'inline';
+    displayMode(actual);
+    bridge.setHostContext({ displayMode: actual });
+    document.getElementById('status').textContent = `AppBridge 已连接 · 展示模式 ${actual}`;
+    return { mode: actual };
+  };
   bridge.ondownloadfile = async () => ({});
   bridge.onsandboxready = () => bridge.sendSandboxResourceReady({ html });
   bridge.oninitialized = async () => {
@@ -157,5 +173,9 @@ document.getElementById('scenario').addEventListener('change', open);
 document.getElementById('wide').addEventListener('click', () => { frame.style.width = '960px'; });
 document.getElementById('narrow').addEventListener('click', () => { frame.style.width = '390px'; });
 document.getElementById('dark').addEventListener('change', event => bridge.setHostContext({ theme: event.target.checked ? 'dark' : 'light' }));
+document.getElementById('inline').addEventListener('click', () => {
+  displayMode('inline');
+  bridge.setHostContext({ displayMode: 'inline' });
+});
 updateScenarios();
 open();

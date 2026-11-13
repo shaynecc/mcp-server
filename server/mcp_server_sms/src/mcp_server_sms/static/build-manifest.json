@@ -11,10 +11,13 @@
     "ui/src/client.js": "843badd3f3c1c7fd5c9113bd8401b9f998c498c738b09efd90ddcee64cd52aba",
     "ui/src/common.jsx": "69d804278129396260ecf962ae9b076d345521e13f9e05c42ebf9bf6d68f558d",
     "ui/src/contracts.js": "c578814f7e62cc1b2c92f90b0f7c99396b32cee86742d5690c04adf6c6c89556",
+    "ui/src/display-mode.js": "ba7e891492c88e3a5fd59ff3a8d16aaac76fbd12ff45b5e86ee04779847bc2fc",
     "ui/src/files.jsx": "729dab47c4db47ffa61c529180976e7f9e9c21c9533648c21aef009601c9f009",
-    "ui/src/host.css": "270fb9163eef65f90f5dd91abedb3a2e8a6c58e232fb0eaff370842184057e09",
-    "ui/src/main.jsx": "dd3f967f100eed2934b0c32e67ab47c746a03fa6027312693001036f631ef34f",
-    "ui/src/qualification.jsx": "ebb2a3fce8af38ac500824fc87c14bcfba1a80f659aa5e166f8c38af0cbe34d6",
+    "ui/src/host.css": "b0fc96623084ff901b54765ea1aad39b74d7d6eab1d297da2ffdec868fa1ceed",
+    "ui/src/main.jsx": "7851ac69ec3db94975a3f2a18437a2948f30f0ef37ed77237cd99e4b68ec17b5",
+    "ui/src/qualification-controller.js": "72b4c6de8cd574b3ae10240002c1331954e6bc39fc6d8a54bd89c31c1e42f73f",
+    "ui/src/qualification-wizard.jsx": "5fe7b68bc32f5ba46f9fae4dd3460ba99d668a91c43b3cb2a63b844788548191",
+    "ui/src/qualification.jsx": "d21207a0617c202690a879a96a8f69f8fec1b9f3f6de32bca4e7acb52c50f2d2",
     "ui/src/send.jsx": "5552a9bb16c2f81b67b43ea2ed98e3fd29b057c2ec4327d9145997b79951072e",
     "ui/src/service.jsx": "0ff5163cd382bd63b89f5db918bdd4505e4beb9b435d102b3a49abdd5f7e943b",
     "ui/src/signature.jsx": "49e16af9b9bb61a8bc0500bdf8239211ae5c2291eb5e0a89d3dd3e317c1649bd",
@@ -27,5 +30,5 @@
     "ui/src/traffic.jsx": "5f9dc49c6dde21ca15ede8b69202038a7466656f9fa7f51af6bfd932499b1544",
     "ui/vite.config.js": "8528c3ae9e50f93872b58562ba2cbb4b4b7c1d2d78e2d9e0b88073579eb69765"
   },
-  "htmlSha256": "a71e3df4caea50e81002e5a061c051f58fda389f3c272948a8ea0019ea0b8a33"
+  "htmlSha256": "cf8831f9fabd8f20d23f4434ecf07778ee7644f3bfd2c552cf221315fb99e7c2"
 }

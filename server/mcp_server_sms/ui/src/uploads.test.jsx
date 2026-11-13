@@ -24,6 +24,11 @@ function fixture({ recipients = false, failPrepare = false, failComplete = false
         'needResponsibleMobile', 'needBusinessCertificateImage'].map(key => [key, false]),
     ));
     if (name === 'get_account_information') return envelope({ userType: 'enterprise', businessName: '测试企业' });
+    if (name === 'recognize_qualification_document') return envelope({
+      businessCertificateName: '测试企业', unifiedSocialCreditIdentifier: 'fixture-credit',
+      legalPersonName: '测试法人', businessCertificateValidityPeriodStart: '2020-01-01',
+      businessCertificateValidityPeriodEnd: '2099-12-31',
+    });
     if (name.startsWith('prepare_')) {
       if (failPrepare) throw Object.assign(new Error('fixture-private-error'), { code: -32603 });
       return envelope({
@@ -157,22 +162,25 @@ it('资质表单上传失败保留输入并允许重新选择，重选成功显�
   const { app, fetch, client } = fixture();
   fetch.mockRejectedValueOnce(new TypeError('fixture network error'));
   render(<QualificationForm client={client} prefill={{ materialName: '保留的资质名称' }} />);
-  await screen.findByText(/当前账号主体/);
-  const input = screen.getByLabelText('营业证件');
+  await screen.findByRole('heading', { name: '基础信息' });
+  fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+  const input = await screen.findByLabelText('营业证件附件');
   fireEvent.change(input, { target: { files: [selected(new Uint8Array([1, 2, 3]))] } });
   await screen.findByText('fixture network error');
-  expect(screen.getByLabelText('资质名称（选填，最多 20 字）').value).toBe('保留的资质名称');
-  expect(input.disabled).toBe(false); expect(screen.getByRole('button', { name: '下一步' }).disabled).toBe(false);
-  fireEvent.change(input, { target: { files: [selected(new Uint8Array([1, 2, 3]))] } });
+  fireEvent.click(screen.getByRole('button', { name: '上一步' }));
+  expect((await screen.findByLabelText('资质名称（选填）')).value).toBe('保留的资质名称');
+  fireEvent.click(screen.getByRole('button', { name: '下一步' }));
+  const retryInput = await screen.findByLabelText('营业证件附件');
+  fireEvent.change(retryInput, { target: { files: [selected(new Uint8Array([1, 2, 3]))] } });
   await screen.findByText('proof.png');
   await waitFor(() => expect(screen.queryByText('fixture network error')).toBeNull());
-  expect((await screen.findByRole('img', { name: '营业证件' })).getAttribute('src')).toMatch(/^blob:/);
+  await screen.findByText('识别完成，请核对信息。');
+  expect((await screen.findByRole('img', { name: '营业证件附件' })).getAttribute('src')).toMatch(/^blob:/);
   fetch.mockRejectedValueOnce(new TypeError('replacement upload failed'));
-  fireEvent.change(input, { target: { files: [selected(new Uint8Array([4, 5, 6]), 'replacement.png')] } });
+  fireEvent.change(retryInput, { target: { files: [selected(new Uint8Array([4, 5, 6]), 'replacement.png')] } });
   await screen.findByText('replacement upload failed');
-  expect(screen.getByText('proof.png')).toBeTruthy();
-  expect(screen.queryByText('replacement.png')).toBeNull();
-  expect(screen.getByRole('img', { name: '营业证件' }).getAttribute('src')).toMatch(/^blob:/);
+  expect(screen.getByText('replacement.png')).toBeTruthy();
+  expect(screen.getByRole('img', { name: '营业证件附件' }).getAttribute('src')).toMatch(/^blob:/);
   expect(app.callServerTool.mock.calls.some(([c]) => c.name === 'submit_qualification')).toBe(false);
-  expect(app.callServerTool.mock.calls.some(([c]) => c.name === 'recognize_qualification_document')).toBe(false);
+  expect(app.callServerTool.mock.calls.filter(([c]) => c.name === 'recognize_qualification_document')).toHaveLength(1);
 });

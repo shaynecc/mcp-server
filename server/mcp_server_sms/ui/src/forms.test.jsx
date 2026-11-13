@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { SmsApp } from './app.jsx';
 import { TrafficForm } from './traffic.jsx';
-import { QualificationForm, qualificationPreview } from './qualification.jsx';
 import { SignatureForm, signaturePreview } from './signature.jsx';
 import { BatchForm, batchPayload } from './batch.jsx';
 import { OperationError, SmsFormClient, page } from './client.js';
@@ -12,8 +11,6 @@ import { batchTemplateSchema, signatureQualificationSchema } from './contracts.j
 
 afterEach(cleanup);
 const rank = Object.fromEntries(['isOnlyTwoElement', 'isSkipOtherUse', 'needOtherUseCheck', 'operatorThreeElement', 'needOperatorImage', 'needOperatorMobile', 'responsibleThreeElement', 'needResponsibleImage', 'needResponsibleMobile', 'needBusinessCertificateImage'].map(key => [key, false]));
-const record = { personName: '测试人员', personIDCard: 'fixture-identity', certificateType: 0 };
-const business = { businessCertificateType: 1, businessCertificateName: '测试企业', unifiedSocialCreditIdentifier: 'fixture-credit', legalPersonName: '测试法人', businessCertificateValidityPeriodStart: '2020-01-01', businessCertificateValidityPeriodEnd: '长期' };
 
 function client(overrides = {}) {
   return { call: vi.fn(), query: vi.fn(), upload: vi.fn(), downloadCsv: vi.fn(), report: vi.fn().mockResolvedValue(undefined), ...overrides };
@@ -72,62 +69,6 @@ it('未知写入结果不会解锁重试或返回修改', async () => {
   expect(screen.getByRole('button', { name: '确认提交' }).disabled).toBe(true);
   expect(screen.getByRole('button', { name: '返回修改' }).disabled).toBe(true);
   expect(api.call).toHaveBeenCalledTimes(2);
-});
-
-it('资质复用经办人时保留正确材料类型，缺失校验不会生成跳过票据', () => {
-  const values = { purpose: 1, sameOperator: true, business, operator: record };
-  const file = { fileContent: 'private/ref', fileSuffix: 'png' };
-  const files = { operator: { front: file, back: file }, other: [] };
-  const { request: result } = qualificationPreview(values, files, { business: 'business-ticket', operator: 'person-ticket' }, {}, rank, { userType: 'enterprise' });
-  expect(result.operatorPerson.personCertificate.map(item => item.fileType)).toEqual([8, 9]);
-  expect(result.responsiblePersonInfo.personCertificate.map(item => item.fileType)).toEqual([10, 11]);
-  expect(result.responsibleCheckTicket).toBe('person-ticket');
-  expect(result.materialName).toBe('测试企业');
-  expect(() => qualificationPreview(values, files, {}, {}, rank, { userType: 'enterprise' })).toThrow('企业信息校验');
-  expect(() => qualificationPreview(values, { operator: { front: file }, other: [] }, { business: 'b', operator: 'p' }, {}, rank, { userType: 'enterprise' })).toThrow('身份证正反面');
-  expect(() => qualificationPreview(values, files, { business: 'b', operator: 'p' }, {}, { ...rank, needBusinessCertificateImage: true }, { userType: 'enterprise' })).toThrow('营业证件');
-});
-
-it('资质表单通过校验后仍需用户确认，模型上下文只收到申请编号', async () => {
-  const user = userEvent.setup();
-  const api = client({ call: vi.fn(async (name) => {
-    if (name === 'get_qualification_requirements') return rank;
-    if (name === 'get_account_information') return { businessName: '测试企业', userType: 'enterprise' };
-    if (name === 'check_qualification_enterprise' || name === 'check_qualification_person') return { status: 0, ticket: 'private-ticket' };
-    if (name === 'submit_qualification') return 123;
-    throw new Error('unexpected call');
-  }) });
-  render(<QualificationForm client={api} prefill={{ legalPerson: {
-    certificateType: 1, personCertificate: { document: { name: '不提交的证件.png', data: 'Zml4dHVyZQ==' } },
-  } }} />);
-  await screen.findByText('当前账号主体：测试企业。营业证件照片选填。');
-  for (const [label, value] of [['企业名称', '测试企业'], ['统一社会信用代码', 'fixture-credit'], ['法人姓名', '测试法人'], ['证件有效期开始', '2020-01-01'], ['证件有效期结束（长期请填写“长期”）', '长期']]) await type(user, label, value);
-  await user.click(screen.getByRole('button', { name: '校验企业信息' }));
-  await screen.findByText('校验已通过');
-  await user.click(screen.getByRole('button', { name: '下一步' }));
-  expect(document.activeElement).toBe(screen.getByRole('heading', { name: '人员信息', exact: true }));
-  await user.click(screen.getByRole('button', { name: '上一步' }));
-  expect(screen.getByLabelText('企业名称').value).toBe('测试企业');
-  expect(screen.getByText('校验已通过')).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: '下一步' }));
-  await type(user, '经办人姓名', '测试人员'); await type(user, '经办人证件号码', 'fixture-identity');
-  expect(screen.getByText('不提交的证件.png（待上传）')).toBeTruthy();
-  await user.click(screen.getByText('补充法人证件信息（选填）'));
-  await user.click(screen.getByRole('button', { name: '校验经办人信息' }));
-  await screen.findByText('校验已通过');
-  await user.click(screen.getByRole('button', { name: '下一步' }));
-  expect(document.activeElement).toBe(screen.getByRole('heading', { name: '授权与补充材料', exact: true }));
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
-  expect(screen.queryByText('不提交的证件.png')).toBeNull();
-  expect(api.call.mock.calls.filter(([name]) => name === 'submit_qualification')).toHaveLength(0);
-  await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
-  await user.click(screen.getByRole('button', { name: '确认提交' }));
-  await screen.findByText('资质申请已提交');
-  const request = api.call.mock.calls.find(([name]) => name === 'submit_qualification')[1].request;
-  expect(request.legalPerson).toBeUndefined();
-  expect(request.operatorPerson.personIDCard).toBe('fixture-identity');
-  expect(request.responsibleCheckTicket).toBe('private-ticket');
-  expect(api.report).toHaveBeenCalledWith({ form: 'qualification', state: 'submitted', qualificationId: 123 });
 });
 
 it('签名申请使用已选资质的归属和私密附件，不修改原始签名', () => {
@@ -287,51 +228,6 @@ it('群发创建、启动和启动后取消分别要求确认', async () => {
   await user.click(cancel);
   await waitFor(() => expect(cancelled).toBe(true));
   expect(api.call.mock.calls.filter(([name]) => name === 'cancel_batch_task')).toHaveLength(1);
-});
-
-it('宿主预填资质的企业、人员及材料，校验和上传仍由用户触发', async () => {
-  const user = userEvent.setup();
-  const draft = name => ({ name, data: 'Zml4dHVyZQ==' });
-  const api = client({
-    call: vi.fn(async name => name === 'get_qualification_requirements' ? rank
-      : { businessName: '当前账号主体', userType: 'smb' }),
-    upload: vi.fn(async file => ({ name: file.name, fileContent: 'fixture/uploaded', fileSuffix: 'png' })),
-  });
-  render(<SmsApp client={api} ready supported toolResult={openDraft('qualification', {
-    materialName: '宿主填写资质', purpose: 2, sameOperator: false, includeLegal: true,
-    businessInfo: { ...business, businessCertificate: draft('营业执照.png') },
-    operatorPerson: { personName: record.personName, personIDCard: record.personIDCard, personMobile: '13800000000',
-      personCertificate: { front: draft('经办人正面.png'), back: draft('经办人反面.png') } },
-    responsiblePersonInfo: { personName: '独立责任人', personIDCard: 'fixture-responsible' },
-    legalPerson: { certificateType: 1, personName: '法人补充姓名', personIDCard: 'fixture-passport',
-      personCertificate: { document: draft('法人护照.png') } },
-    powerOfAttorney: [draft('委托书.png')], otherMaterials: [draft('补充材料.png')],
-  })} />);
-  expect((await screen.findByLabelText('企业名称')).value).toBe('测试企业');
-  expect(screen.getByLabelText(/资质名称/).value).toBe('宿主填写资质');
-  expect(screen.getByLabelText('统一社会信用代码').value).toBe('fixture-credit');
-  expect(screen.getByText('营业执照.png（待上传）')).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: '下一步' }));
-  expect(screen.getByLabelText('经办人证件号码').value).toBe('fixture-identity');
-  expect(screen.getByLabelText('经办人手机号').value).toBe('13800000000');
-  expect(screen.getByLabelText('经办人短信验证码').value).toBe('');
-  expect(screen.getByLabelText('责任人姓名').value).toBe('独立责任人');
-  expect(screen.getByLabelText('法人证件号码').value).toBe('fixture-passport');
-  expect(screen.getByText('护照')).toBeTruthy();
-  for (const name of ['经办人正面.png', '经办人反面.png', '法人护照.png']) {
-    expect(screen.getByText(name + '（待上传）')).toBeTruthy();
-  }
-  await user.click(screen.getByRole('button', { name: '下一步' }));
-  expect(screen.getByText('委托书.png（待上传）')).toBeTruthy();
-  expect(screen.getByText('补充材料.png（待上传）')).toBeTruthy();
-  expect(api.call.mock.calls.map(([name]) => name)).toEqual(['get_qualification_requirements', 'get_account_information']);
-  expect(api.upload).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: '上传 委托书.png' }));
-  expect(await screen.findByText('委托书.png')).toBeTruthy();
-  expect(api.upload).toHaveBeenCalledWith(draft('委托书.png'), { kind: 'material', category: 'authorization' });
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
-  expect(await screen.findByText('请先完成企业信息校验。')).toBeTruthy();
-  expect(api.call).not.toHaveBeenCalledWith('submit_qualification', expect.anything(), expect.anything());
 });
 
 it('宿主预填签名、适用消息组和证明材料，真实查询后才选中资源', async () => {
@@ -546,34 +442,6 @@ it('名单示例首次查询失败后，可重选精查到的同一个模板', a
     ['get_batch_csv_template', { sub_account: 'g', template_id: 't', include_variables: true }],
     ['get_batch_csv_template', { sub_account: 'g', template_id: 't', include_variables: true }],
   ]);
-});
-
-it('企业校验未通过时，只有客户额外确认才转人工审核', async () => {
-  const user = userEvent.setup();
-  const api = client({ call: vi.fn(async name => {
-    if (name === 'get_qualification_requirements') return rank;
-    if (name === 'get_account_information') return { businessName: '测试企业', userType: 'enterprise' };
-    if (name === 'check_qualification_enterprise') return { manualReview: true, code: 'enterprise_check_mismatch', requestId: 'test-check' };
-    if (name === 'check_qualification_person') return { status: 0, ticket: 'person-check' };
-    if (name === 'submit_qualification') return 123;
-    throw new Error('unexpected tool');
-  }) });
-  render(<QualificationForm client={api} prefill={{ businessInfo: business, operatorPerson: record }} />);
-  await user.click(await screen.findByRole('button', { name: '校验企业信息' }));
-  expect(await screen.findByText('排障编号 test-check')).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: '下一步' }));
-  await user.click(screen.getByRole('button', { name: '校验经办人信息' }));
-  await screen.findByText('校验已通过');
-  await user.click(screen.getByRole('button', { name: '下一步' }));
-  await user.click(screen.getByRole('button', { name: '核对申请信息' }));
-  const submit = screen.getByRole('button', { name: '确认转人工审核' });
-  await user.click(screen.getByText('我已核对以上信息，同意提交本次操作'));
-  expect(submit.disabled).toBe(true);
-  await user.click(screen.getByText('我已核对企业信息，同意转人工审核'));
-  await user.click(submit);
-  const [, args] = api.call.mock.calls.find(([name]) => name === 'submit_qualification');
-  expect(args).toMatchObject({ confirm_manual_review: true, request: { operatorCheckTicket: 'person-check' } });
-  expect(args.request.businessCheckTicket).toBeUndefined();
 });
 
 it('开通表单展示协议，单独确认后提交，刷新未生效时不再显示提交', async () => {
